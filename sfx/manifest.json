@@ -1,0 +1,17 @@
+[
+  { "name": "ui-tick", "seconds": 1, "prompt": "short soft UI tick, a gentle clean plastic click, quiet and precise", "event": "ui" },
+  { "name": "mote-absorb", "seconds": 1, "prompt": "soft wet plip, a tiny droplet sinking into a jelly surface", "event": "absorb" },
+  { "name": "pellet-gulp", "seconds": 1, "prompt": "small quick underwater gulp, a soft bubble pop", "event": "pellet" },
+  { "name": "cell-absorb-big", "seconds": 2, "prompt": "deep resonant membrane thump with a wet squelch, a large jelly body engulfing another", "event": "absorbBig" },
+  { "name": "cell-split", "seconds": 1, "prompt": "quick wet tearing squelch, a soft elastic body ripping in two", "event": "split" },
+  { "name": "mass-eject", "seconds": 1, "prompt": "short wet spurt, a puff of fluid ejected underwater", "event": "eject" },
+  { "name": "barb-burst", "seconds": 2, "prompt": "sharp popping crack of a taut membrane bursting, splashy snap", "event": "burst" },
+  { "name": "danger-ping", "seconds": 1, "prompt": "single low ominous sonar ping resonating underwater", "event": "danger" },
+  { "name": "countdown-beep", "seconds": 1, "prompt": "short neutral electronic countdown beep, clean and even", "event": "countdown" },
+  { "name": "round-start-go", "seconds": 1, "prompt": "bright rising chime, an energetic start signal", "event": "go" },
+  { "name": "time-rewind", "seconds": 2, "prompt": "whooshing reverse sweep, a tape rewinding swirl", "event": "rewind" },
+  { "name": "goal-win", "seconds": 3, "prompt": "short triumphant ascending chime fanfare of four bright notes", "event": "win" },
+  { "name": "round-lose", "seconds": 2, "prompt": "three soft descending disappointed tones, gently deflating", "event": "lose" },
+  { "name": "time-up", "seconds": 2, "prompt": "three flat buzzer beeps signaling time expired", "event": "timeup" },
+  { "name": "achievement-unlock", "seconds": 2, "prompt": "sparkling three-note reward chime, bright and celebratory", "event": "achievement" }
+]

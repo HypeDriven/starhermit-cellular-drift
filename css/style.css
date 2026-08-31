@@ -1,0 +1,3 @@
+/* Cellular Drift — base styles */
+:root { color-scheme: dark; }
+html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #eafcff; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
