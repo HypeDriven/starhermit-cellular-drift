@@ -10,8 +10,6 @@ import { createPlatform } from './platform.js';
 
 const R = window.CDRules;
 const C = window.CDContent;
-const A = window.CDAudio;
-const P = window.CDPlatform;
 const S = window.CDStore;
 
 // ---------- DOM helpers (single shared layout model) ----------
@@ -53,8 +51,8 @@ async function boot() {
   wrap.appendChild(canvas);
 
   renderer = createRenderer(canvas, {});
-  audio = A.createAudio({});
-  platform = P.createPlatform();
+  audio = createAudio({});
+  platform = createPlatform();
   try { await platform.syncTime(); } catch (e) {}
 
   buildUI(wrap);
@@ -116,7 +114,7 @@ function buildUI(root) {
   const pracSel = el('section', { class: 'cd-screen cd-pracsel' }, [el('h2', {}, ['Practice'])]);
   C.PRACTICE.forEach((p) => {
     const b = el('button', { class: 'cd-btn cd-itembtn' }, [p.name, p.description ? '' : '']);
-    if (S.load().progress.practiceDone[p.id]) b.appendChild(el('span', { class: 'cd-done' }, ['done']));
+    if (S.load().progress.practiceDone && S.load().progress.practiceDone[p.id]) b.appendChild(el('span', { class: 'cd-done' }, ['done']));
     b.addEventListener('click', () => startPractice(p));
     pracSel.appendChild(b);
   });
@@ -125,7 +123,7 @@ function buildUI(root) {
   const chalList = el('section', { class: 'cd-screen cd-challist' }, [el('h2', {}, ['Challenges'])]);
   C.CHALLENGES.forEach((ch) => {
     const b = el('button', { class: 'cd-btn cd-itembtn' }, [ch.name, ch.description ? '' : '']);
-    if (S.load().progress.challengeDone[ch.id]) b.appendChild(el('span', { class: 'cd-done' }, ['done']));
+    if (S.load().progress.challengeDone && S.load().progress.challengeDone[ch.id]) b.appendChild(el('span', { class: 'cd-done' }, ['done']));
     b.addEventListener('click', () => startChallenge(ch));
     chalList.appendChild(b);
   });
