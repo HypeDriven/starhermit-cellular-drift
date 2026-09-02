@@ -1,3 +1,38 @@
 /* Cellular Drift — base styles */
 :root { color-scheme: dark; }
 html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #eafcff; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+
+/* Layout shell: the canvas fills the viewport at any size, screens overlay it.
+   Nothing is allowed to exceed the viewport — no document-level overflow. */
+.cd-root { position: fixed; inset: 0; overflow: hidden; }
+#cd-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+.cd-screen {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; box-sizing: border-box; text-align: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  overflow-y: auto;
+}
+/* center content when it fits, scroll from the top when it doesn't */
+.cd-screen > :first-child { margin-top: auto; }
+.cd-screen > :last-child { margin-bottom: auto; }
+
+.cd-game-title { font-size: clamp(1.8rem, 6vw, 3.2rem); margin: 0; }
+.cd-tagline { max-width: 36em; margin: 0; }
+
+.cd-btn {
+  min-width: 0; max-width: 100%; box-sizing: border-box;
+  padding: 12px 22px; font-size: clamp(0.95rem, 2.5vw, 1.1rem); font-family: inherit;
+  background: rgba(79, 216, 194, 0.12); color: #eafcff;
+  border: 1px solid rgba(79, 216, 194, 0.55); border-radius: 10px; cursor: pointer;
+}
+.cd-btn:hover { background: rgba(79, 216, 194, 0.25); }
+.cd-itembtn { width: min(420px, 100%); }
+.cd-sub, .cd-done { display: block; font-size: 0.8em; opacity: 0.75; }
+
+/* HUD overlays the arena: only its controls intercept input */
+.cd-hud { pointer-events: none; justify-content: flex-start; align-items: stretch; text-align: left; }
+.cd-hud .cd-pausebtn { pointer-events: auto; align-self: flex-end; }
+
+.cd-setrow { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; width: min(420px, 100%); }

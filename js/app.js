@@ -51,6 +51,8 @@ async function boot() {
   wrap.appendChild(canvas);
 
   renderer = createRenderer(canvas, {});
+  renderer.resize();
+  window.addEventListener('resize', () => renderer.resize());
   audio = createAudio({});
   platform = createPlatform();
   try { await platform.syncTime(); } catch (e) {}
