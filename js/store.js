@@ -32,6 +32,8 @@
       lessonsDone: {},          // lessonId -> true
       journeyStars: {},         // levelId -> 0..3
       journeyBest: {},          // levelId -> score
+      practiceDone: {},         // presetId -> true
+      challengeDone: {},        // challengeId -> true
       challengeBest: {},        // challengeId -> score
       dailiesDone: {},          // dateStr -> score
       dailyStreak: { last: null, count: 0 },

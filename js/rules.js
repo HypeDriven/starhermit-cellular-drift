@@ -673,8 +673,6 @@
           st.rivalCells++;
           if (state.config.noRivalAbsorb && eater.playerId === 'p0') {
             // pacifist constraint: absorbing a rival ends the round as a violation
-            dead[prey.id] = true;
-            eater.mass += prey.mass;
             state.cells = state.cells.filter(function (cl) { return !dead[cl.id]; });
             state.phase = 'terminal';
             state.terminalReason = 'constraint-violated';
@@ -916,14 +914,15 @@
       cells: state.cells, motes: state.motes, pellets: state.pellets, barbs: state.barbs,
       nextEntityId: state.nextEntityId,
       moteRespawnAcc: state.moteRespawnAcc,
-      stats: state.stats
+      stats: state.stats,
+      _seen: state._seen || {}
     }));
   }
 
   function deserialize(obj) {
     if (!obj || obj.version !== RULES_VERSION) throw new Error('unsupported state version');
     var state = JSON.parse(JSON.stringify(obj));
-    state._seen = {};
+    if (!state._seen) state._seen = {};
     return state;
   }
 

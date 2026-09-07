@@ -9,14 +9,17 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
 
 .cd-screen {
   position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
   gap: 12px; box-sizing: border-box; text-align: center;
   padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   overflow-y: auto;
 }
-/* center content when it fits, scroll from the top when it doesn't */
-.cd-screen > :first-child { margin-top: auto; }
-.cd-screen > :last-child { margin-bottom: auto; }
+/* Short content is centered purely by the auto margins below — never by
+   justify-content, which would push overflowing lists above the scroll origin. */
+/* center content when it fits, scroll from the top when it doesn't
+   (not on the HUD: its controls are positioned, not centered) */
+.cd-screen:not(.cd-hud) > :first-child { margin-top: auto; }
+.cd-screen:not(.cd-hud) > :last-child { margin-bottom: auto; }
 
 .cd-game-title { font-size: clamp(1.8rem, 6vw, 3.2rem); margin: 0; }
 .cd-tagline { max-width: 36em; margin: 0; }
@@ -36,3 +39,38 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
 .cd-hud .cd-pausebtn { pointer-events: auto; align-self: flex-end; }
 
 .cd-setrow { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; width: min(420px, 100%); }
+
+/* Menu/overlay screens sit above the canvas; give text a legible backdrop.
+   The HUD is the exception: the playfield must show through. */
+.cd-screen:not(.cd-hud) { background: rgba(4, 19, 27, 0.82); }
+
+.cd-btn:focus-visible, input:focus-visible { outline: 2px solid #9bf6e4; outline-offset: 2px; }
+.cd-btn:disabled { opacity: 0.45; cursor: default; }
+.cd-btn:disabled:hover { background: rgba(79, 216, 194, 0.12); }
+.cd-backbtn { margin-top: 8px; }
+
+/* HUD top cluster: objective + progress readout */
+.cd-hudtop { pointer-events: none; }
+.cd-hud .cd-objective { font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,0.7); max-width: 70ch; }
+.cd-hud .cd-progress { font-size: 0.9em; opacity: 0.9; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+
+/* Thumb-zone action tray (split/eject/hint), kept off browser chrome */
+.cd-actions {
+  position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex; gap: 8px; pointer-events: none;
+}
+.cd-actions .cd-actbtn { pointer-events: auto; min-width: 64px; min-height: 44px; }
+
+/* captions / text cues for meaningful audio */
+.cd-captions {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: max(16px, env(safe-area-inset-bottom));
+  pointer-events: none; font-size: 0.95em; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
+/* results score breakdown */
+.cd-breakdown { display: grid; grid-template-columns: auto auto; gap: 4px 18px; margin: 0; text-align: left; }
+.cd-breakdown dt { opacity: 0.85; }
+.cd-breakdown dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.cd-total { font-weight: 600; }
+.cd-helptext { max-width: 60ch; text-align: left; }

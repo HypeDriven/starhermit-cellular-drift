@@ -1,12 +1,11 @@
 /* Cellular Drift — local HTTP server: serves the distribution and same-origin
  * /api routes (server time, score submission). No external dependencies. */
-'use strict';
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-
-const ROOT = __dirname;
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 
 let scores = []; // { contentId, score, objectiveMet, invalid, durationMs, sessionId }
@@ -24,11 +23,17 @@ const server = http.createServer((req, res) => {
   if (url.startsWith('/api/v1/scores')) {
     if (req.method === 'POST') {
       let body = '';
-      req.on('data', (c) => { body += c; });
+      let tooBig = false;
+      req.on('data', (c) => {
+        body += c;
+        if (body.length > 16384) { tooBig = true; req.destroy(); }
+      });
       req.on('end', () => {
+        if (tooBig) return;
         try {
           const entry = JSON.parse(body);
           scores.push(entry);
+          if (scores.length > 10000) scores = scores.slice(-5000);
           send(res, 200, 'ok');
         } catch (e) {
           send(res, 400, 'bad request');
@@ -44,19 +49,30 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // static files (default index.html)
+  // static files (default index.html); normalized and confined to ROOT
   let file = url === '/' ? '/index.html' : url.split('?')[0];
-  const fp = path.join(ROOT, file);
+  let rel;
+  try {
+    rel = decodeURIComponent(file);
+  } catch (e) {
+    return send(res, 400, 'bad request');
+  }
+  const fp = path.normalize(path.join(ROOT, rel));
+  if (!fp.startsWith(ROOT + path.sep)) return send(res, 403, 'forbidden');
   fs.readFile(fp, (err, data) => {
     if (err) return send(res, 404, 'not found');
-    const ext = path.extname(file).toLowerCase();
+    const ext = path.extname(fp).toLowerCase();
     let type = 'application/octet-stream';
     if (ext === '.html') type = 'text/html; charset=utf-8';
     else if (ext === '.js' || ext === '.mjs') type = 'application/javascript; charset=utf-8';
     else if (ext === '.css') type = 'text/css; charset=utf-8';
     else if (ext === '.json') type = 'application/json; charset=utf-8';
+    else if (ext === '.svg') type = 'image/svg+xml';
+    else if (ext === '.png') type = 'image/png';
+    else if (ext === '.ico') type = 'image/x-icon';
     else if (ext === '.opus') type = 'audio/ogg';
-    send(res, 200, data.toString('binary'), type);
+    res.writeHead(200, { 'content-type': type });
+    res.end(data); // Buffer: binary assets (opus/png) must not go through string encoding
   });
 });
 
@@ -64,4 +80,4 @@ server.listen(PORT, () => {
   console.log('Cellular Drift server listening on http://localhost:' + PORT);
 });
 
-module.exports = { server };
+export { server };

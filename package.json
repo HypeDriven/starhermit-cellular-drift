@@ -1,0 +1,12 @@
+{
+  "name": "cellular-drift",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "node tests/e2e.mjs",
+    "test": "node tests/rules-regression.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
+  }
+}

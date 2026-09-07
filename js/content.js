@@ -193,11 +193,11 @@
 
   // ---------- Practice presets (restart/rewind allowed, never ranked)
   var PRACTICE = [
-    { id: 'calm', name: 'Calm', description: 'A quiet dish with one timid rival. Learn the currents.',
+    { id: 'calm', name: 'Calm', description: 'A quiet dish with one timid rival. Learn the currents.', seed: 'practice-calm',
       params: { arenaRadius: 560, moteCap: 140, rivals: 1, rivalSkill: 0.25, barbs: 1, durationTicks: R.TICK_RATE * 150, goalMass: 100 } },
-    { id: 'standard', name: 'Standard', description: 'A balanced culture: three rivals, a few barbs.',
+    { id: 'standard', name: 'Standard', description: 'A balanced culture: three rivals, a few barbs.', seed: 'practice-standard',
       params: { arenaRadius: 620, moteCap: 150, rivals: 3, rivalSkill: 0.5, barbs: 3, durationTicks: R.TICK_RATE * 180, goalMass: 160 } },
-    { id: 'expert', name: 'Expert', description: 'Six hungry rivals and a field of barbs.',
+    { id: 'expert', name: 'Expert', description: 'Six hungry rivals and a field of barbs.', seed: 'practice-expert',
       params: { arenaRadius: 680, moteCap: 160, rivals: 6, rivalSkill: 0.75, barbs: 6, durationTicks: R.TICK_RATE * 200, goalMass: 220 } }
   ];
 

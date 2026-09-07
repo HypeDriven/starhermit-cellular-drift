@@ -267,6 +267,7 @@ export function createAudio(opts) {
     setIntensity(v) { intensity = Math.max(0, Math.min(1, v)); },
     setSeed(seed) { variantSeed = (seed & 0x7fffffff) || 1; },
     setVolume(name, v) { settings[name] = v; applyVolumes(); },
+    setVolumes(vols) { Object.assign(settings, vols || {}); applyVolumes(); },
     setMuted(m) { settings.muted = m; applyVolumes(); },
     suspend() { // backgrounded tab: keep clocks, silence output
       stopMusic();
