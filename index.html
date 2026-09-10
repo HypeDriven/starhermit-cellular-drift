@@ -5,17 +5,53 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Cellular Drift</title>
-<link rel="stylesheet" href="./css/style.css" />
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
-<script src="./js/rng.js"></script>
-<script src="./js/rules.js"></script>
-<script src="./js/content.js"></script>
-<script src="./js/store.js"></script>
+<!-- ASSET VERSION: bump the v= tag on every reference below together (tests/e2e.mjs checks they match) -->
+<link rel="stylesheet" href="./css/style.css?v=20260908b" />
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js?v=20260908b"}}</script>
+<script src="./js/rng.js?v=20260908b"></script>
+<script src="./js/rules.js?v=20260908b"></script>
+<script src="./js/content.js?v=20260908b"></script>
+<script src="./js/store.js?v=20260908b"></script>
 <style>
   :root { --bg:#071c26; }
   html,body{margin:0;padding:0;height:100%;background:#04131b;color:#eafcff;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;}
+  .cd-bootfail{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;background:#04131b;}
+  .cd-bootfail p{max-width:40em;margin:0;opacity:0.85;}
+  .cd-bootfail button{padding:12px 22px;font:inherit;color:#eafcff;background:rgba(79,216,194,0.12);border:1px solid rgba(79,216,194,0.55);border-radius:10px;cursor:pointer;}
 </style>
-<script type="module" src="./js/app.js?v=review-fix-1"></script>
+<script>
+  // Boot watchdog: a game that never draws its title screen must say so instead
+  // of sitting on a dark page. Cleared by app.js once the UI is built.
+  (function () {
+    var failed = false;
+    function fail(reason) {
+      if (failed || document.body.getAttribute('data-cd-booted')) return;
+      failed = true;
+      var box = document.createElement('section');
+      box.className = 'cd-bootfail';
+      box.setAttribute('role', 'alert');
+      box.innerHTML = '<h2>Cellular Drift could not start</h2><p>' + reason + '</p>' +
+        '<p>Reload to fetch a fresh copy. If it keeps happening, your browser may be blocking modern JavaScript modules or WebGL.</p>';
+      var btn = document.createElement('button');
+      btn.textContent = 'Reload';
+      btn.addEventListener('click', function () { location.reload(); });
+      box.appendChild(btn);
+      document.body.appendChild(box);
+    }
+    window.__cdBootFail = fail;
+    window.addEventListener('error', function (e) {
+      if (e && e.message) fail('A script failed to load or run: ' + e.message);
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e && e.reason;
+      fail('Startup failed: ' + (r && r.message ? r.message : String(r)));
+    });
+    window.addEventListener('load', function () {
+      setTimeout(function () { fail('The game did not finish loading in time (a script or the 3D renderer is missing or blocked).'); }, 8000);
+    });
+  })();
+</script>
+<script type="module" src="./js/app.js?v=20260908b"></script>
 </head>
 <body></body>
 </html>

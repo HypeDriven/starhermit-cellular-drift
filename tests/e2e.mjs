@@ -1,279 +1,440 @@
 /**
  * Cellular Drift — end-to-end QA playthrough (tests/e2e.mjs, run via `npm run test:e2e`).
  *
- * Drives the real visible UI in headless Chrome (playwright-core + system Chrome):
- * self-contained static server on an ephemeral port, two passes (desktop 1280x800,
- * mobile 390x844 with touch), screenshots per stage, console/pageerror collection
- * with benign GPU/swiftshader noise filtered. Any non-benign error fails the run.
+ * Drives the real visible UI in headless Chrome (playwright-core + system Chrome)
+ * against the REAL production server (server.js on an ephemeral port), so the
+ * headers, MIME types and routing a player actually gets are what is tested.
  *
- * Coverage: title -> mode select -> every mode list (Learn / Journey / Daily /
- * Practice / Challenge) -> starting a round in each mode reaches the in-game HUD,
- * plus pointer/keyboard play input attempts and the Pause control.
+ * Four passes: desktop 1280x800, short desktop 1280x600 (docked devtools /
+ * small laptop), phone portrait 390x844 @3x touch, phone landscape 844x390 @3x
+ * touch. Console errors AND warnings fail the run (GPU/swiftshader noise filtered).
  *
- * REGRESSION PROBES (defects found while authoring this test; since fixed in
- * the game code — the probes below now FAIL the run if any resurface):
- *   1. DEAD MAIN LOOP — js/app.js defined frame() but never called it. Fixed:
- *      boot() starts a fixed-step rAF loop (30 ticks/s accumulator) that steps
- *      the rules engine and draws with interpolation.
- *   2. NO INPUT HANDLERS — fixed: pointer/touch steering, Space split,
- *      E eject, arrow/WASD steering, Esc pause, HUD action buttons.
- *   3. DEAD PAUSE BUTTON — fixed: the HUD "Pause" button opens the
- *      pause/settings overlay, which has Resume / Restart / Leave controls.
- *   4. updateHUD() computed objective/progress text but never wrote it to the
- *      DOM — fixed; the HUD is populated every frame.
- *   5. JOURNEY LIST CLIPPED — .cd-screen centers short content via auto
- *      margins so long lists scroll from the top; verified reachable here.
- * A full playthrough to a results screen is exercised through the shipped
- * rules module (window.CDRules/CDContent bot validation) as a supplement —
- * all UI interaction above is real clicks/keys on visible elements.
+ * What each pass proves, with real clicks/keys/pointer on visible elements:
+ *   - BOOT: the title screen appears, the boot watchdog in index.html was
+ *     cleared, and every asset reference in index.html carries the same version
+ *     tag and is served with revalidation headers (a fresh index.html paired
+ *     with stale CSS/modules is exactly what reproduced as "dark screen, nothing
+ *     happens, UI cut off at the top").
+ *   - LAYOUT: on EVERY screen (title, help, modes, all five mode lists, HUD,
+ *     pause, results) no child starts above the viewport, nothing is clipped
+ *     horizontally, and everything is reachable by scrolling the screen itself.
+ *   - RENDER: the WebGL canvas is not a dark void: the player's cell is drawn,
+ *     in the player colour, at the screen position the rules engine reports.
+ *   - LIVENESS: the fixed-step simulation advances, pointer (and touch)
+ *     steering moves the player, Split/Eject/Hint/keys are wired.
+ *   - PLAYTHROUGH: lesson 1 is played to completion through the real UI and
+ *     the results overlay appears with a headline, then Retry/Back work.
+ *   - Pause overlay: settings controls, Resume, Restart, Leave, Esc.
+ * Plus one deliberate failure: with a module blocked, the page must show the
+ * boot-failure message rather than a silent dark screen.
  */
-import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SHOT = (stage, vp) => `/tmp/cellular-drift-e2e-${stage}-${vp}.png`;
+const SHOT_DIR = path.join(ROOT, 'test-results', 'e2e');
+const SHOT = (stage, vp) => path.join(SHOT_DIR, `${vp}-${stage}.png`);
 
-const MIME = {
-  '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
-  '.mjs': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png',
-  '.ico': 'image/x-icon', '.wav': 'audio/wav', '.mp3': 'audio/mpeg',
-  '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.glb': 'model/gltf-binary',
-  '.woff2': 'font/woff2', '.ts': 'application/typescript',
-};
+process.env.PORT = '0'; // server.js listens on import; 0 = ephemeral
+const { server } = await import('../server.js');
 
-const server = http.createServer(async (req, res) => {
-  // same-origin /api routes the game optionally syncs against (mirrors server.js)
-  const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
-  if (urlPath === '/api/v1/time') {
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ now: Date.now() }));
-    return;
-  }
-  if (urlPath.startsWith('/api/v1/scores')) {
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end('[]');
-    return;
-  }
-  try {
-    const rel = urlPath === '/' ? '/index.html' : urlPath;
-    const fp = path.join(ROOT, path.normalize(rel));
-    if (!fp.startsWith(ROOT)) { res.writeHead(403).end(); return; }
-    const data = await readFile(fp);
-    res.writeHead(200, { 'content-type': MIME[path.extname(fp).toLowerCase()] || 'application/octet-stream' });
-    res.end(data);
-  } catch {
-    res.writeHead(404).end('not found');
-  }
-});
+const browserNoise = /GL Driver Message|GPU stall due to ReadPixels|Automatic fallback to software WebGL|EnableWebGLDeveloperExtensions|swiftshader/i;
 
-const browserNoise = /GL Driver Message|GPU stall due to ReadPixels|Automatic fallback to software WebGL|EnableWebGLDeveloperExtensions/i;
+const PASSES = [
+  { label: 'desktop', viewport: { width: 1280, height: 800 } },
+  { label: 'desktop-short', viewport: { width: 1280, height: 600 } },
+  { label: 'phone-portrait', viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true },
+  { label: 'phone-landscape', viewport: { width: 844, height: 390 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true },
+];
 
-const step = async (name, fn) => {
-  await fn();
-  console.log(`ok - ${name}`);
-};
+let base = '';
+const step = async (name, fn) => { await fn(); console.log(`ok - ${name}`); };
+const fail = (msg) => { throw new Error(msg); };
 
 async function visibleScreen(page, cls) {
   await page.waitForSelector(`${cls}:visible`, { timeout: 10000 });
 }
 
-async function inViewport(page, loc) {
-  const box = await loc.boundingBox();
-  if (!box) return false;
-  const vp = page.viewportSize();
-  return box.y >= 0 && box.y + box.height <= vp.height && box.x >= 0 && box.x + box.width <= vp.width;
+async function debug(page) {
+  return page.evaluate(() => window.CDApp.debug());
 }
 
-/** Click an item button; if the preferred one is clipped outside the viewport
- * (journey list overflow bug), wheel-scroll like a player and pick one that is
- * genuinely reachable, recording the defect. */
-async function clickItemButton(page, screenSel, preferredText, defects, label) {
-  const items = page.locator(`${screenSel} .cd-itembtn:visible`);
-  const preferred = items.filter({ hasText: preferredText }).first();
-  await preferred.waitFor({ state: 'attached', timeout: 10000 });
-  if (await preferred.isVisible() && await inViewport(page, preferred)) {
-    await preferred.click();
-    return preferredText;
-  }
-  // real-user fallback: scroll the list with the mouse wheel, then take the
-  // last stage that lands inside the viewport
-  const section = page.locator(screenSel);
-  await section.hover();
-  for (let i = 0; i < 12; i++) await page.mouse.wheel(0, 600);
-  const count = await items.count();
-  for (let i = count - 1; i >= 0; i--) {
-    const it = items.nth(i);
-    if (await it.isVisible() && await inViewport(page, it)) {
-      const name = ((await it.textContent()) || '').trim();
-      defects.add(`[${label}] "${preferredText}" clipped outside viewport in ${screenSel} (list overflow centering bug); clicked reachable "${name}" instead`);
-      await it.click();
-      return name;
+// ---------- layout probe: nothing above the viewport, nothing clipped, all reachable
+async function assertLayout(page, label, stage) {
+  const problems = await page.evaluate(() => {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const out = [];
+    const screens = [...document.querySelectorAll('.cd-screen')].filter((s) => s.style.display !== 'none' && s.offsetParent !== null);
+    if (screens.length !== 1) out.push(`expected exactly one visible screen, found ${screens.length}`);
+    for (const s of screens) {
+      const cls = s.className.replace('cd-screen', '').trim();
+      s.scrollTop = 0;
+      const kids = [...s.children];
+      kids.forEach((k, i) => {
+        const r = k.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) return;
+        const name = `${cls} child#${i} <${k.tagName.toLowerCase()}> "${(k.textContent || '').trim().slice(0, 30)}"`;
+        if (r.top < -0.5) out.push(`${name} starts ABOVE the viewport (top=${r.top.toFixed(1)})`);
+        if (r.left < -0.5 || r.right > vw + 0.5) out.push(`${name} clipped horizontally (left=${r.left.toFixed(1)}, right=${r.right.toFixed(1)}, vw=${vw})`);
+        // reachable: within the container's scroll range
+        if (k.offsetTop + k.offsetHeight > s.scrollHeight + 0.5) out.push(`${name} is beyond the scroll range`);
+        if (getComputedStyle(s).position === 'absolute' && r.bottom > vh + 0.5 && s.scrollHeight <= s.clientHeight + 0.5) {
+          out.push(`${name} extends below the viewport but the screen is not scrollable (bottom=${r.bottom.toFixed(1)}, vh=${vh})`);
+        }
+      });
+      // scrolling to the end must bring the last child fully into view
+      if (s.scrollHeight > s.clientHeight + 0.5) {
+        s.scrollTop = s.scrollHeight;
+        const last = kids[kids.length - 1].getBoundingClientRect();
+        if (last.bottom > vh + 0.5) out.push(`${cls} last child still below the viewport after scrolling to the end (bottom=${last.bottom.toFixed(1)}, vh=${vh})`);
+        s.scrollTop = 0;
+      }
+      // text must not be clipped inside its own box
+      for (const t of s.querySelectorAll('button, h1, h2, p, dt, dd, span, div')) {
+        if (t.children.length && t.tagName !== 'BUTTON') continue;
+        if (t.scrollWidth > t.clientWidth + 1 && getComputedStyle(t).overflowX !== 'visible') out.push(`${cls} text overflow in <${t.tagName.toLowerCase()}> "${(t.textContent || '').trim().slice(0, 30)}"`);
+      }
     }
-  }
-  throw new Error(`no reachable item button in ${screenSel}`);
+    return out;
+  });
+  if (problems.length) fail(`[${label}] layout defects on ${stage}:\n  ` + problems.join('\n  '));
 }
 
-/** Click through: title -> mode select -> <modeBtnText> -> <itemBtnText> -> HUD. */
-async function startRoundVia(page, modeBtnText, itemBtnText, defects, label) {
+// ---------- render probe: is the player's cell actually drawn where the rules say?
+async function assertPlayerRendered(page, label, stage) {
+  const r = await page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      const d = window.CDApp.debug();
+      const gl = document.getElementById('cd-canvas');
+      const w = gl.clientWidth, h = gl.clientHeight;
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(gl, 0, 0, w, h);
+      const img = ctx.getImageData(0, 0, w, h).data;
+      const lum = (i) => (0.2126 * img[i] + 0.7152 * img[i + 1] + 0.0722 * img[i + 2]) / 255;
+      // whole-frame stats on a coarse grid
+      let bright = 0, samples = 0;
+      for (let y = 0; y < h; y += 4) for (let x = 0; x < w; x += 4) { samples++; if (lum((y * w + x) * 4) > 0.2) bright++; }
+      // player cell: pixels of the theme's player hue within its radius around the projected centroid
+      const hueOf = (r, g, b) => {
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), c = mx - mn;
+        if (c === 0) return null;
+        let hh = mx === r ? ((g - b) / c) % 6 : mx === g ? (b - r) / c + 2 : (r - g) / c + 4;
+        return ((hh * 60) + 360) % 360;
+      };
+      const pc = d.playerColor || '#ffd166';
+      const targetHue = hueOf(parseInt(pc.slice(1, 3), 16), parseInt(pc.slice(3, 5), 16), parseInt(pc.slice(5, 7), 16));
+      let matched = 0, probed = 0;
+      if (d.screen) {
+        const rad = Math.max(3, Math.sqrt(d.mass) * 1.2 * (h / (2 * 120)) * 0.5);
+        for (let dy = -rad; dy <= rad; dy += 1) for (let dx = -rad; dx <= rad; dx += 1) {
+          const x = Math.round(d.screen.x + dx), y = Math.round(d.screen.y + dy);
+          if (x < 0 || y < 0 || x >= w || y >= h) continue;
+          probed++;
+          const i = (y * w + x) * 4;
+          const hue = hueOf(img[i], img[i + 1], img[i + 2]);
+          const sat = (Math.max(img[i], img[i + 1], img[i + 2]) - Math.min(img[i], img[i + 1], img[i + 2])) / 255;
+          const dh = hue == null ? 999 : Math.min(Math.abs(hue - targetHue), 360 - Math.abs(hue - targetHue));
+          if (lum(i) > 0.25 && sat > 0.12 && dh < 40) matched++;
+        }
+      }
+      resolve({ w, h, brightFrac: bright / Math.max(1, samples), matched, probed, playerColor: pc, screen: d.screen, phase: d.phase });
+    });
+  }));
+  if (r.w < 50 || r.h < 50) fail(`[${label}] ${stage}: canvas has no size (${r.w}x${r.h})`);
+  if (r.brightFrac === 0) fail(`[${label}] ${stage}: canvas is a uniformly dark void (nothing rendered)`);
+  if (!r.screen) fail(`[${label}] ${stage}: no player centroid to render`);
+  if (r.matched === 0) fail(`[${label}] ${stage}: player cell (${r.playerColor}) not drawn at its projected position ${JSON.stringify(r.screen)} (probed ${r.probed}px, bright frame fraction ${r.brightFrac.toFixed(3)})`);
+}
+
+async function assertNoBootFailure(page, label) {
+  const booted = await page.evaluate(() => document.body.getAttribute('data-cd-booted'));
+  if (!booted) fail(`[${label}] app never marked itself booted`);
+  if (await page.locator('.cd-bootfail').count()) fail(`[${label}] boot watchdog fired: ` + (await page.locator('.cd-bootfail').textContent()));
+}
+
+/** Click through: title -> mode select -> <modeBtnText> -> <itemBtnText> -> HUD, checking layout at every screen. */
+async function startRoundVia(page, label, modeBtnText, itemBtnText) {
   await visibleScreen(page, '.cd-title');
   await page.locator('.cd-title .cd-play').click();
   await visibleScreen(page, '.cd-modesel');
   await page.locator('.cd-modesel .cd-modebtn').filter({ hasText: new RegExp(`^${modeBtnText}$`) }).click();
-  if (itemBtnText) {
-    const screenSel = { 'Journey': '.cd-journeylist', 'Learn': '.cd-lessonlist', 'Practice': '.cd-pracsel', 'Challenge': '.cd-challist', 'Daily Challenge': '.cd-dailysetup' }[modeBtnText];
-    await clickItemButton(page, screenSel, itemBtnText, defects, label);
-  }
+  const screenSel = { 'Journey': '.cd-journeylist', 'Learn': '.cd-lessonlist', 'Practice': '.cd-pracsel', 'Challenge': '.cd-challist', 'Daily Challenge': '.cd-dailysetup' }[modeBtnText];
+  await visibleScreen(page, screenSel);
+  await assertLayout(page, label, `${modeBtnText} list`);
+  const item = page.locator(`${screenSel} .cd-itembtn`).filter({ hasText: itemBtnText }).first();
+  await item.scrollIntoViewIfNeeded();
+  await item.click();
   await visibleScreen(page, '.cd-hud');
-  if (!(await page.locator('#cd-canvas').isVisible())) throw new Error('game canvas not visible on HUD');
+  if (!(await page.locator('#cd-canvas').isVisible())) fail('game canvas not visible on HUD');
+  await page.waitForTimeout(400);
+  await assertLayout(page, label, `${modeBtnText} HUD`);
 }
 
-async function runPass(browser, label, viewport, errors, defects) {
+async function runPass(browser, pass) {
+  const { label } = pass;
   const context = await browser.newContext({
-    viewport,
-    hasTouch: label === 'mobile',
+    viewport: pass.viewport, deviceScaleFactor: pass.deviceScaleFactor || 1,
+    hasTouch: !!pass.hasTouch, isMobile: !!pass.isMobile,
   });
   const page = await context.newPage();
+  const errors = [];
   page.on('pageerror', (e) => errors.push(`[${label}] pageerror: ${e.message}`));
   page.on('console', (m) => {
-    if (m.type() === 'error' && !browserNoise.test(m.text())) errors.push(`[${label}] console: ${m.text()}`);
+    if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) errors.push(`[${label}] console.${m.type()}: ${m.text()}`);
   });
+  page.on('requestfailed', (r) => errors.push(`[${label}] request failed: ${r.url()} ${r.failure() && r.failure().errorText}`));
+  page.on('response', (r) => { if (r.status() >= 400) errors.push(`[${label}] HTTP ${r.status()} ${r.url()}`); });
 
-  await step(`${label}: load + title screen`, async () => {
-    await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'networkidle' });
+  await step(`${label}: cold load -> title screen, watchdog cleared`, async () => {
+    await page.goto(base, { waitUntil: 'networkidle' });
     await visibleScreen(page, '.cd-title');
     const title = await page.locator('.cd-title .cd-game-title').textContent();
-    if (!/Cellular Drift/.test(title || '')) throw new Error('game title missing');
+    if (!/Cellular Drift/.test(title || '')) fail('game title missing');
+    await assertNoBootFailure(page, label);
+    await assertLayout(page, label, 'title');
     await page.screenshot({ path: SHOT('title', label) });
   });
 
-  await step(`${label}: practice mode list + start "Calm" round -> HUD`, async () => {
+  await step(`${label}: help screen`, async () => {
+    await page.locator('.cd-title .cd-btn', { hasText: 'Help' }).click();
+    await visibleScreen(page, '.cd-help');
+    await assertLayout(page, label, 'help');
+    await page.screenshot({ path: SHOT('help', label) });
+    await page.locator('.cd-help .cd-btn', { hasText: 'Close' }).click();
+    await visibleScreen(page, '.cd-title');
+  });
+
+  await step(`${label}: mode select + every mode list lays out`, async () => {
     await page.locator('.cd-title .cd-play').click();
     await visibleScreen(page, '.cd-modesel');
+    await assertLayout(page, label, 'mode select');
     const modes = await page.locator('.cd-modesel .cd-modebtn:visible').allTextContents();
     for (const m of ['Learn', 'Journey', 'Daily Challenge', 'Practice', 'Challenge']) {
-      if (!modes.some((t) => t.includes(m))) throw new Error(`mode button missing: ${m}`);
+      if (!modes.some((t) => t.includes(m))) fail(`mode button missing: ${m}`);
     }
     await page.screenshot({ path: SHOT('modes', label) });
-    await page.locator('.cd-modesel .cd-modebtn', { hasText: 'Practice' }).click();
-    await visibleScreen(page, '.cd-pracsel');
-    const presets = await page.locator('.cd-pracsel .cd-itembtn:visible').count();
-    if (presets !== 3) throw new Error(`expected 3 practice presets, got ${presets}`);
-    await page.locator('.cd-pracsel .cd-itembtn', { hasText: 'Calm' }).click();
-    await visibleScreen(page, '.cd-hud');
-    if (!(await page.locator('#cd-canvas').isVisible())) throw new Error('game canvas not visible on HUD');
-    await page.waitForTimeout(600);
-    await page.screenshot({ path: SHOT('hud-practice', label) });
+    const lists = { 'Learn': '.cd-lessonlist', 'Journey': '.cd-journeylist', 'Daily Challenge': '.cd-dailysetup', 'Practice': '.cd-pracsel', 'Challenge': '.cd-challist' };
+    for (const [mode, sel] of Object.entries(lists)) {
+      await page.locator('.cd-modesel .cd-modebtn').filter({ hasText: new RegExp(`^${mode}$`) }).click();
+      await visibleScreen(page, sel);
+      await assertLayout(page, label, `${mode} list`);
+      if (mode === 'Journey') {
+        const n = await page.locator(`${sel} .cd-itembtn`).count();
+        if (n < 20) fail(`journey list too short: ${n}`);
+        await page.screenshot({ path: SHOT('journey-list', label) });
+        // a player scrolls the long list with the wheel and reaches the last stage
+        await page.locator(sel).hover();
+        for (let i = 0; i < 20; i++) await page.mouse.wheel(0, 800);
+        const last = page.locator(`${sel} .cd-itembtn`).last();
+        const box = await last.boundingBox();
+        if (!box || box.y + box.height > pass.viewport.height + 0.5 || box.y < 0) fail(`last journey stage not reachable by wheel scrolling: ${JSON.stringify(box)}`);
+        await page.screenshot({ path: SHOT('journey-list-end', label) });
+      }
+      await page.locator(`${sel} .cd-backbtn`).click();
+      await visibleScreen(page, '.cd-modesel');
+    }
+    await page.locator('.cd-modesel .cd-backbtn').click();
+    await visibleScreen(page, '.cd-title');
   });
 
-  await step(`${label}: play input via real pointer + keys`, async () => {
-    // what a player does: steer with pointer, split with Space, eject with E
+  await step(`${label}: practice "Calm" -> HUD renders the player, sim advances`, async () => {
+    await startRoundVia(page, label, 'Practice', 'Calm');
+    await page.screenshot({ path: SHOT('hud-practice', label) });
+    const a = await debug(page);
+    if (a.phase !== 'active') fail(`round not active after start: ${JSON.stringify(a)}`);
+    await assertPlayerRendered(page, label, 'practice HUD');
+    await page.waitForTimeout(1000);
+    const b = await debug(page);
+    if (b.tick - a.tick < 15) fail(`simulation not advancing: tick ${a.tick} -> ${b.tick} in 1s`);
+    const prog = (await page.locator('.cd-hud .cd-progress').textContent()) || '';
+    if (!/Mass \d+/.test(prog)) fail(`HUD progress not populated: "${prog}"`);
+    const obj = (await page.locator('.cd-hud .cd-objective').textContent()) || '';
+    if (!obj.trim()) fail('HUD objective never populated');
+  });
+
+  await step(`${label}: pointer steering moves the player; keys and action buttons are wired`, async () => {
     const box = await page.locator('#cd-canvas').boundingBox();
-    const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
-    await page.mouse.move(cx + 120, cy - 80);
-    await page.mouse.move(cx - 60, cy + 100, { steps: 8 });
-    await page.mouse.click(cx + 40, cy + 40);
+    const before = await debug(page);
+    // steer to the right for a second
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await page.mouse.move(box.x + box.width * 0.95, box.y + box.height * 0.5, { steps: 6 });
+    await page.waitForTimeout(1000);
+    const after = await debug(page);
+    if (!(after.centroid.x > before.centroid.x + 5)) fail(`pointer steering had no effect: x ${before.centroid.x.toFixed(1)} -> ${after.centroid.x.toFixed(1)}`);
+    if (pass.hasTouch) {
+      const b2 = await debug(page);
+      await page.touchscreen.tap(box.x + box.width * 0.5, box.y + box.height * 0.08); // up
+      await page.waitForTimeout(800);
+      const a2 = await debug(page);
+      if (!(a2.centroid.y > b2.centroid.y + 3)) fail(`touch steering had no effect: y ${b2.centroid.y.toFixed(1)} -> ${a2.centroid.y.toFixed(1)}`);
+    }
+    // keyboard steering: hold ArrowLeft
+    const k0 = await debug(page);
+    await page.keyboard.down('ArrowLeft');
+    await page.waitForTimeout(700);
+    await page.keyboard.up('ArrowLeft');
+    const k1 = await debug(page);
+    if (!(k1.centroid.x < k0.centroid.x - 3)) fail(`keyboard steering had no effect: x ${k0.centroid.x.toFixed(1)} -> ${k1.centroid.x.toFixed(1)}`);
+    // actions: at start mass these are illegal and must say so (visible explanation), never throw
     await page.keyboard.press('Space');
     await page.keyboard.press('e');
-    await page.keyboard.press('ArrowLeft');
-    await page.waitForTimeout(800);
-    // regression probe: updateHUD() must write the objective to the DOM
-    const obj = (await page.locator('.cd-hud .cd-objective').textContent()) || '';
-    if (!obj.trim()) defects.add(`[${label}] HUD objective text never populated (updateHUD writes nothing to the DOM)`);
+    await page.locator('.cd-hud .cd-actbtn', { hasText: 'Hint' }).click();
+    await page.waitForTimeout(200);
+    const cap = (await page.locator('.cd-hud .cd-captions').textContent()) || '';
+    if (!cap.trim()) fail('Hint produced no caption');
+    await assertLayout(page, label, 'HUD after input');
   });
 
-  await step(`${label}: pause / settings control`, async () => {
+  await step(`${label}: pause overlay: settings, Esc, Resume, Restart, Leave`, async () => {
     await page.locator('.cd-hud .cd-pausebtn').click();
+    await visibleScreen(page, '.cd-pause');
+    await assertLayout(page, label, 'pause');
+    const t0 = (await debug(page)).tick;
+    await page.locator('.cd-pause input[type="range"]').first().fill('0.3');
+    await page.locator('.cd-pause input[type="checkbox"]').nth(1).check(); // captions
+    await page.screenshot({ path: SHOT('pause', label) });
     await page.waitForTimeout(400);
-    if (await page.locator('.cd-pause').isVisible()) {
-      // pause overlay open: exercise the settings controls
-      await page.locator('.cd-pause input[type="range"]').first().fill('0.3');
-      await page.locator('.cd-pause input[type="checkbox"]').first().check();
-      await page.screenshot({ path: SHOT('pause', label) });
-    } else {
-      defects.add(`[${label}] HUD "Pause" button has no listener; pause/settings overlay never opens`);
-    }
+    if ((await debug(page)).tick !== t0) fail('simulation kept running while paused');
+    await page.keyboard.press('Escape');
+    await visibleScreen(page, '.cd-hud');
+    await page.keyboard.press('Escape');
+    await visibleScreen(page, '.cd-pause');
+    await page.locator('.cd-pause .cd-btn', { hasText: 'Resume' }).click();
+    await visibleScreen(page, '.cd-hud');
+    await page.locator('.cd-hud .cd-pausebtn').click();
+    await page.locator('.cd-pause .cd-btn', { hasText: 'Restart round' }).click();
+    await visibleScreen(page, '.cd-hud');
+    if ((await debug(page)).tick > 20) fail('Restart round did not reset the simulation');
+    await page.locator('.cd-hud .cd-pausebtn').click();
+    await page.locator('.cd-pause .cd-btn', { hasText: 'Leave to modes' }).click();
+    await visibleScreen(page, '.cd-modesel');
+    if ((await debug(page)).phase !== null) fail('Leave to modes did not end the session');
   });
 
-  await step(`${label}: journey stage start`, async () => {
-    await page.reload({ waitUntil: 'networkidle' });
-    await startRoundVia(page, 'Journey', 'First Culture', defects, label);
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: SHOT('hud-journey', label) });
-  });
-
-  await step(`${label}: learn lesson 1 start`, async () => {
-    await page.reload({ waitUntil: 'networkidle' });
-    await startRoundVia(page, 'Learn', 'Drift', defects, label);
-    await page.waitForTimeout(500);
+  await step(`${label}: full lesson 1 playthrough -> results -> Retry / Back`, async () => {
+    await page.locator('.cd-modesel .cd-backbtn').click();
+    await startRoundVia(page, label, 'Learn', 'Drift');
     await page.screenshot({ path: SHOT('hud-lesson', label) });
+    await assertPlayerRendered(page, label, 'lesson HUD');
+    const canvas = await page.locator('#cd-canvas').boundingBox();
+    const deadline = Date.now() + 40000;
+    let d = await debug(page);
+    if (d.goal.type !== 'reach-marker') fail(`lesson 1 goal is ${d.goal.type}, expected reach-marker`);
+    while (d.phase === 'active' && Date.now() < deadline) {
+      // a player drags the pointer toward the glowing marker
+      const tx = Math.min(canvas.x + canvas.width - 2, Math.max(canvas.x + 2, canvas.x + d.goal.screen.x));
+      const ty = Math.min(canvas.y + canvas.height - 2, Math.max(canvas.y + 2, canvas.y + d.goal.screen.y));
+      await page.mouse.move(tx, ty, { steps: 2 });
+      await page.waitForTimeout(250);
+      d = await debug(page);
+    }
+    if (d.phase !== 'terminal') fail(`lesson 1 did not finish within 40s: ${JSON.stringify(d)}`);
+    if (d.terminalReason !== 'goal-complete') fail(`lesson 1 ended with ${d.terminalReason}, expected goal-complete`);
+    await visibleScreen(page, '.cd-result');
+    await assertLayout(page, label, 'results');
+    const headline = (await page.locator('.cd-result h2').textContent()) || '';
+    if (!/Goal complete/.test(headline)) fail(`results headline "${headline}"`);
+    const total = (await page.locator('.cd-result .cd-total').textContent()) || '';
+    if (!/Total score: \d+/.test(total)) fail(`results total "${total}"`);
+    await page.screenshot({ path: SHOT('results', label) });
+    await page.locator('.cd-result .cd-btn', { hasText: 'Retry' }).click();
+    await visibleScreen(page, '.cd-hud');
+    if ((await debug(page)).phase !== 'active') fail('Retry did not start a new round');
+    await page.locator('.cd-hud .cd-pausebtn').click();
+    await page.locator('.cd-pause .cd-btn', { hasText: 'Leave to modes' }).click();
+    await visibleScreen(page, '.cd-modesel');
+    // progress persisted: lesson marked done
+    await page.locator('.cd-modesel .cd-modebtn').filter({ hasText: /^Learn$/ }).click();
+    const done = await page.locator('.cd-lessonlist .cd-itembtn').filter({ hasText: 'Drift' }).first().locator('.cd-done').count();
+    if (!done) fail('lesson completion not persisted to the lesson list');
+    await page.locator('.cd-lessonlist .cd-backbtn').click();
   });
 
-  await step(`${label}: daily challenge start`, async () => {
-    await page.reload({ waitUntil: 'networkidle' });
-    await startRoundVia(page, 'Daily Challenge', 'Begin the day', defects, label);
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: SHOT('hud-daily', label) });
-  });
+  for (const [mode, item, stage] of [['Journey', 'First Culture', 'journey'], ['Daily Challenge', 'Begin the day', 'daily'], ['Challenge', 'Lean Drift', 'challenge']]) {
+    await step(`${label}: ${mode} start -> HUD renders`, async () => {
+      await page.reload({ waitUntil: 'networkidle' });
+      await startRoundVia(page, label, mode, item);
+      await assertPlayerRendered(page, label, `${stage} HUD`);
+      await page.screenshot({ path: SHOT(`hud-${stage}`, label) });
+    });
+  }
 
-  await step(`${label}: challenge mode start`, async () => {
-    await page.reload({ waitUntil: 'networkidle' });
-    await startRoundVia(page, 'Challenge', 'Lean Drift', defects, label);
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: SHOT('hud-challenge', label) });
-  });
-
-  await step(`${label}: rules engine terminal-state sanity (headless supplement)`, async () => {
-    // Verify via the shipped rules module that authored content is actually
-    // completable by a bot (complements the real-UI playthrough above).
+  await step(`${label}: rules engine content validation (headless supplement)`, async () => {
     const report = await page.evaluate(() => {
       const C = window.CDContent;
-      const out = {};
-      out.lesson1 = C.validateContent(C.LESSONS[0]);
-      out.journey1 = C.validateContent(C.journeyStages()[0]);
-      out.challengeLean = C.validateContent(C.CHALLENGES[0]);
-      out.practiceMissingSeeds = C.PRACTICE.filter((p) => !p.seed).map((p) => p.id);
-      return out;
+      const bad = [];
+      for (const c of [...C.LESSONS, ...C.journeyStages(), ...C.PRACTICE, ...C.CHALLENGES, C.dailyFor(new Date())]) {
+        const v = C.validateContent(c);
+        if (v.length) bad.push(c.id + ': ' + v.join('; '));
+      }
+      return bad;
     });
-    for (const k of ['lesson1', 'journey1', 'challengeLean']) {
-      if (report[k].length) throw new Error(`rules validation failed for ${k}: ${report[k].join('; ')}`);
-    }
-    if (report.practiceMissingSeeds.length) {
-      defects.add(`[${label}] practice presets lack a seed (${report.practiceMissingSeeds.join(', ')}); validateContent flags them as invalid`);
-    }
+    if (report.length) fail('content validation failed:\n' + report.join('\n'));
   });
 
+  await context.close();
+  if (errors.length) fail(`page errors/warnings in ${label} pass:\n` + errors.join('\n'));
+}
+
+// ---------- asset freshness: same version tag everywhere, revalidating headers
+async function checkAssetVersions() {
+  const html = await (await fetch(base)).text();
+  const refs = [...html.matchAll(/(?:src|href)="(\.\/[^"]+)"/g)].map((m) => m[1])
+    .concat([...html.matchAll(/"three":"([^"]+)"/g)].map((m) => m[1]));
+  const versions = new Set();
+  for (const ref of refs) {
+    if (/favicon/.test(ref)) continue;
+    const m = ref.match(/[?&]v=([^&]+)/);
+    if (!m) fail(`asset reference without a version tag: ${ref}`);
+    versions.add(m[1]);
+  }
+  if (versions.size !== 1) fail(`asset version tags disagree: ${[...versions].join(', ')}`);
+  for (const ref of ['/', '/css/style.css', '/js/app.js', '/js/render.js', '/js/rules.js', '/vendor/three.module.js']) {
+    const res = await fetch(base + ref.slice(1));
+    if (res.status !== 200) fail(`${ref}: HTTP ${res.status}`);
+    if (!/no-cache/.test(res.headers.get('cache-control') || '')) fail(`${ref}: missing Cache-Control: no-cache (got "${res.headers.get('cache-control')}")`);
+    const etag = res.headers.get('etag');
+    if (!etag) fail(`${ref}: missing ETag`);
+    const again = await fetch(base + ref.slice(1), { headers: { 'if-none-match': etag } });
+    if (again.status !== 304) fail(`${ref}: revalidation returned ${again.status}, expected 304`);
+    if (/\.js$/.test(ref) && !/javascript/.test(res.headers.get('content-type') || '')) fail(`${ref}: wrong MIME ${res.headers.get('content-type')}`);
+  }
+}
+
+// ---------- the boot watchdog must turn a broken load into a visible message
+async function checkBootWatchdog(browser) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await context.newPage();
+  await page.route('**/js/render.js*', (route) => route.abort());
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForSelector('.cd-bootfail:visible', { timeout: 15000 }).catch(() => fail('module load failure left a silent dark screen: no boot-failure message within 15s'));
+  const txt = await page.locator('.cd-bootfail').textContent();
+  if (!/could not start/i.test(txt || '')) fail(`boot failure message unexpected: ${txt}`);
+  if (await page.locator('.cd-title:visible').count()) fail('title screen shown despite a failed module load');
+  await page.screenshot({ path: SHOT('bootfail', 'blocked-module') });
   await context.close();
 }
 
 let browser = null;
-const defects = new Set();
 try {
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await mkdir(SHOT_DIR, { recursive: true });
+  await new Promise((resolve) => (server.listening ? resolve() : server.once('listening', resolve)));
+  base = `http://127.0.0.1:${server.address().port}/`;
+  await step('asset versions + revalidating cache headers from the real server', checkAssetVersions);
+
   browser = await chromium.launch({
     executablePath: '/usr/bin/google-chrome',
     args: ['--no-sandbox', '--enable-unsafe-swiftshader'],
   });
-
-  const desktopErrors = [];
-  await runPass(browser, 'desktop', { width: 1280, height: 800 }, desktopErrors, defects);
-  if (desktopErrors.length) {
-    throw new Error('page errors in desktop pass:\n' + desktopErrors.join('\n'));
-  }
-
-  const mobileErrors = [];
-  await runPass(browser, 'mobile', { width: 390, height: 844 }, mobileErrors, defects);
-  if (mobileErrors.length) {
-    throw new Error('page errors in mobile pass:\n' + mobileErrors.join('\n'));
-  }
-
-  if (defects.size) {
-    throw new Error('regression probes fired (previously-fixed defects resurfaced):\n' + [...defects].join('\n'));
-  }
-  console.log('\nE2E PASS — cellular-drift: desktop + mobile passes, no page errors, no regression probes fired');
+  await step('boot watchdog reports a blocked module instead of a dark screen', () => checkBootWatchdog(browser));
+  // E2E_PASSES=desktop,phone-portrait narrows the viewport passes while iterating
+  const only = (process.env.E2E_PASSES || '').split(',').filter(Boolean);
+  for (const pass of PASSES) if (!only.length || only.includes(pass.label)) await runPass(browser, pass);
+  console.log(`\nE2E PASS — cellular-drift: ${PASSES.length} viewport passes, full lesson playthrough, no page errors/warnings, no layout or render defects. Screenshots: ${SHOT_DIR}`);
 } finally {
   if (browser) await browser.close();
   await new Promise((resolve) => server.close(resolve));

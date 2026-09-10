@@ -67,6 +67,7 @@ async function boot() {
       el('h2', {}, ['3D unavailable']),
       el('p', {}, ['Cellular Drift needs WebGL to render the dish. Your progress and settings are preserved; try a browser with WebGL enabled.'])
     ]));
+    document.body.setAttribute('data-cd-booted', '1'); // a visible explanation is a completed boot
     return;
   }
   renderer.resize();
@@ -94,12 +95,14 @@ async function boot() {
   applyPresentationSettings();
   wireInput();
   requestAnimationFrame(frame);
+  document.body.setAttribute('data-cd-booted', '1'); // clears the index.html boot watchdog
 }
 
 function applyPresentationSettings() {
   const st = settings();
   renderer.setReducedMotion(!!st.reducedMotion);
   renderer.setHighContrast(!!st.highContrast);
+  document.body.classList.toggle('cd-hc', !!st.highContrast); // CSS: drops decorative backdrops
   if (st.graphicsTier && st.graphicsTier !== 'auto') renderer.setTier(st.graphicsTier);
   applyTheme(currentContent);
 }
@@ -145,9 +148,8 @@ function buildUI(root) {
   // ---- learn lessons list ----
   const lessonList = el('section', { class: 'cd-screen cd-lessonlist' }, [el('h2', {}, ['Lessons'])]);
   C.LESSONS.forEach((l) => {
-    const b = el('button', { class: 'cd-btn cd-itembtn' }, [l.name]);
+    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': l.id }, [l.name]);
     if (l.brief) b.appendChild(el('span', { class: 'cd-sub' }, [l.brief]));
-    if (S.load().progress.lessonsDone[l.id]) b.appendChild(el('span', { class: 'cd-done' }, ['done']));
     b.addEventListener('click', () => { audio.play('ui'); startRound(l, 'learn'); });
     lessonList.appendChild(b);
   });
@@ -156,10 +158,8 @@ function buildUI(root) {
   // ---- journey stages list ----
   const journeyList = el('section', { class: 'cd-screen cd-journeylist' }, [el('h2', {}, ['Journey'])]);
   C.journeyStages().forEach((st) => {
-    const b = el('button', { class: 'cd-btn cd-itembtn' }, [st.name]);
+    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': st.id }, [st.name]);
     if (st.mastery) b.appendChild(el('span', { class: 'cd-sub' }, ['mastery stage']));
-    const stars = S.load().progress.journeyStars[st.id];
-    if (stars) b.appendChild(el('span', { class: 'cd-done' }, ['done' + (stars > 1 ? ' ★'.repeat(Math.min(3, stars)) : '')]));
     b.addEventListener('click', () => { audio.play('ui'); startRound(st, 'journey'); });
     journeyList.appendChild(b);
   });
@@ -179,10 +179,8 @@ function buildUI(root) {
   // ---- practice preset select ----
   const pracSel = el('section', { class: 'cd-screen cd-pracsel' }, [el('h2', {}, ['Practice'])]);
   C.PRACTICE.forEach((p) => {
-    const b = el('button', { class: 'cd-btn cd-itembtn' }, [p.name]);
+    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': p.id }, [p.name]);
     if (p.description) b.appendChild(el('span', { class: 'cd-sub' }, [p.description]));
-    const prog = S.load().progress;
-    if (prog.practiceDone && prog.practiceDone[p.id]) b.appendChild(el('span', { class: 'cd-done' }, ['done']));
     b.addEventListener('click', () => { audio.play('ui'); startRound(p, 'practice'); });
     pracSel.appendChild(b);
   });
@@ -191,10 +189,8 @@ function buildUI(root) {
   // ---- challenges list ----
   const chalList = el('section', { class: 'cd-screen cd-challist' }, [el('h2', {}, ['Challenges'])]);
   C.CHALLENGES.forEach((ch) => {
-    const b = el('button', { class: 'cd-btn cd-itembtn' }, [ch.name]);
+    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': ch.id }, [ch.name]);
     if (ch.description) b.appendChild(el('span', { class: 'cd-sub' }, [ch.description]));
-    const prog2 = S.load().progress;
-    if (prog2.challengeDone && prog2.challengeDone[ch.id]) b.appendChild(el('span', { class: 'cd-done' }, ['done']));
     b.addEventListener('click', () => { audio.play('ui'); startRound(ch, 'challenge'); });
     chalList.appendChild(b);
   });
@@ -341,6 +337,29 @@ function buildUI(root) {
   showScreen('title');
 }
 
+// "done" badges reflect the save document at the moment a list is shown, so a
+// round finished this session is marked without a reload.
+function refreshProgressMarks() {
+  const prog = S.load().progress;
+  const mark = (list, textFor) => {
+    if (!list) return;
+    for (const b of list.querySelectorAll('.cd-itembtn[data-cid]')) {
+      const text = textFor(b.getAttribute('data-cid'));
+      let badge = b.querySelector('.cd-done');
+      if (!text) { if (badge) badge.remove(); continue; }
+      if (!badge) { badge = el('span', { class: 'cd-done' }, ['']); b.appendChild(badge); }
+      badge.textContent = text;
+    }
+  };
+  mark(ui.lessonList, (id) => prog.lessonsDone[id] ? 'done' : '');
+  mark(ui.journeyList, (id) => {
+    const stars = prog.journeyStars[id];
+    return stars ? 'done' + (stars > 1 ? ' ★'.repeat(Math.min(3, stars)) : '') : '';
+  });
+  mark(ui.pracSel, (id) => prog.practiceDone && prog.practiceDone[id] ? 'done' : '');
+  mark(ui.chalList, (id) => prog.challengeDone && prog.challengeDone[id] ? 'done' : '');
+}
+
 function backButton(label, fn) {
   const b = el('button', { class: 'cd-btn cd-backbtn' }, [label]);
   b.addEventListener('click', () => { audio.play('ui'); fn(); });
@@ -361,6 +380,7 @@ function showScreen(name) {
     s.style.display = show ? '' : 'none';
     if (show && s.classList.contains('cd-overlay')) s.setAttribute('data-open', '1'); else if (!show) s.removeAttribute('data-open');
   }
+  if (name === 'lessons' || name === 'journey' || name === 'practice' || name === 'challenge') refreshProgressMarks();
   // keyboard users land on the first control of the newly shown screen;
   // the HUD is the exception: focus there would swallow Space for the button
   const first = name !== 'hud' && map[name] && map[name].querySelector('button, input');
@@ -446,6 +466,7 @@ function doAction(type) {
 function showHint() {
   if (!game || game.phase !== 'active') return;
   const h = R.hint(game, 'p0');
+  audio.play('hint');
   ui.captions.textContent = h.text;
   clearTimeout(ui._capT);
   ui._capT = setTimeout(() => { ui.captions.textContent = ''; }, 2600);
@@ -562,8 +583,9 @@ function afterTick() {
     if (st.splits > prevStats.splits) audio.play('split');
     if (st.ejects > prevStats.ejects) audio.play('eject');
     if (st.barbBursts > prevStats.barbBursts) { audio.play('burst'); renderer.shake(4); }
+    if ((st.merges || 0) > prevStats.merges) audio.play('merge');
   }
-  prevStats = { motes: st.motes, pellets: st.pellets, rivalCells: st.rivalCells, splits: st.splits, ejects: st.ejects, barbBursts: st.barbBursts };
+  prevStats = { motes: st.motes, pellets: st.pellets, rivalCells: st.rivalCells, splits: st.splits, ejects: st.ejects, barbBursts: st.barbBursts, merges: st.merges || 0 };
 
   // adaptive intensity + throttled danger ping
   if (game.tick % 15 === 0) {
@@ -693,6 +715,7 @@ function showResults() {
   // build the results panel
   const r = ui.result;
   while (r.firstChild) r.removeChild(r.firstChild);
+  r.appendChild(el('img', { class: 'cd-resultart', src: './assets/results-vignette.webp', alt: '', 'aria-hidden': 'true', width: '768', height: '432' }));
   r.appendChild(el('h2', {}, [headline]));
   const list = el('dl', { class: 'cd-breakdown' });
   const labels = { motes: 'Motes absorbed', pellets: 'Pellets absorbed', rivalMass: 'Rival mass', survival: 'Survival', peakMass: 'Peak mass', rankBonus: 'Rank bonus', objectiveBonus: 'Objective bonus' };
@@ -712,6 +735,23 @@ function showResults() {
 }
 
 // ---------- public entry point used by index.html module script ----------
-window.CDApp = { boot };
+// debug(): read-only snapshot for QA automation (tests/e2e.mjs); never mutates state.
+function debug() {
+  if (!game) return { phase: null };
+  const c = R.centroid(game, 'p0');
+  const goal = game.config.goal;
+  const st = settings();
+  const theme = C.themeById((currentContent && currentContent.theme) || st.theme || 'lagoon');
+  return {
+    phase: game.phase, tick: game.tick, paused, mode: currentMode,
+    playerColor: st.cvdPalette ? C.CVD_THEME_PATCH.player : theme.player,
+    mass: R.playerMass(game, 'p0'),
+    centroid: c ? { x: c.x, y: c.y } : null,
+    screen: c ? renderer.worldToScreen(c.x, c.y) : null,
+    goal: goal.type === 'reach-marker' ? { type: goal.type, x: goal.x || 0, y: goal.y || 0, radius: goal.radius || 40, screen: renderer.worldToScreen(goal.x || 0, goal.y || 0) } : { type: goal.type },
+    terminalReason: game.terminalReason
+  };
+}
+window.CDApp = { boot, debug };
 
 boot();

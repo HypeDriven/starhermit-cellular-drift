@@ -10,7 +10,9 @@ export function createPlatform() {
   async function syncTime() {
     try {
       const t0 = Date.now();
-      const res = await fetch('/api/v1/time', { cache: 'no-store' });
+      // bounded: a host that never answers must not hold the title screen hostage
+      const signal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(2500) : undefined;
+      const res = await fetch('/api/v1/time', { cache: 'no-store', signal });
       if (!res.ok) return false;
       const body = await res.json();
       const t1 = Date.now();

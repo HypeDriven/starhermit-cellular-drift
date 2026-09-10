@@ -19,3 +19,6 @@ Generated with MOSS-SoundEffect v2.0, 48 kHz mono Opus (96 kbps VBR, loudness-no
 | round-lose.opus | lose | three soft descending disappointed tones, gently deflating |
 | time-up.opus | timeup | three flat buzzer beeps signaling time expired |
 | achievement-unlock.opus | achievement | sparkling three-note reward chime, bright and celebratory |
+| cell-merge.opus | merge | soft wet slurp of two jelly blobs fusing together into one, gentle suction and a rounded low plop |
+| hint-ping.opus | hint | gentle bright glassy ping with a soft watery shimmer tail, a helpful notification chime underwater |
+| ambience-medium.opus | ambience | continuous quiet underwater ambience inside a warm petri dish, slow fluid movement, tiny distant bubbles, soft muffled low hum, calm and organic, seamless loop |

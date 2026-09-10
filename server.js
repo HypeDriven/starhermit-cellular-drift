@@ -59,7 +59,25 @@ const server = http.createServer((req, res) => {
   }
   const fp = path.normalize(path.join(ROOT, rel));
   if (!fp.startsWith(ROOT + path.sep)) return send(res, 403, 'forbidden');
-  fs.readFile(fp, (err, data) => {
+  // dev-only material is never served: tests, tools, node_modules, dotfiles
+  const segs = path.relative(ROOT, fp).split(path.sep);
+  if (['tests', 'tools', 'node_modules'].includes(segs[0]) || segs.some((s) => s.startsWith('.'))) return send(res, 404, 'not found');
+  fs.stat(fp, (statErr, st) => {
+    if (statErr || !st.isFile()) return send(res, 404, 'not found');
+    // Every asset revalidates on each load (cheap 304s via ETag) so a deploy can
+    // never leave a browser or proxy pairing a fresh index.html with stale
+    // CSS/JS modules — that combination reproduced as "dark screen, UI cut off".
+    const etag = 'W/"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + '"';
+    const headers = {
+      'cache-control': 'no-cache',
+      'etag': etag,
+      'last-modified': st.mtime.toUTCString()
+    };
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, headers);
+      return res.end();
+    }
+    fs.readFile(fp, (err, data) => {
     if (err) return send(res, 404, 'not found');
     const ext = path.extname(fp).toLowerCase();
     let type = 'application/octet-stream';
@@ -69,15 +87,18 @@ const server = http.createServer((req, res) => {
     else if (ext === '.json') type = 'application/json; charset=utf-8';
     else if (ext === '.svg') type = 'image/svg+xml';
     else if (ext === '.png') type = 'image/png';
+    else if (ext === '.webp') type = 'image/webp';
     else if (ext === '.ico') type = 'image/x-icon';
     else if (ext === '.opus') type = 'audio/ogg';
-    res.writeHead(200, { 'content-type': type });
+    headers['content-type'] = type;
+    res.writeHead(200, headers);
     res.end(data); // Buffer: binary assets (opus/png) must not go through string encoding
+    });
   });
 });
 
 server.listen(PORT, () => {
-  console.log('Cellular Drift server listening on http://localhost:' + PORT);
+  console.log('Cellular Drift server listening on http://localhost:' + server.address().port);
 });
 
 export { server };

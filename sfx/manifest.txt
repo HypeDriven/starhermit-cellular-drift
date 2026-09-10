@@ -1,0 +1,22 @@
+# Cellular Drift — SFX manifest (canonical). One clip per line:
+# file | event id (audio.play name in js/audio.js SAMPLES/events) | description of the sound | usage context
+# Clips: MOSS-SoundEffect v2.0, 48 kHz mono Opus 96 kbps VBR, loudness-normalised (-20 LUFS), 100 steps.
+# Every event also has a WebAudio synth fallback in js/audio.js that plays while the sample decodes or if it fails.
+ui-tick.opus | ui | Short soft UI tick, a gentle clean plastic click, quiet and precise | Every menu/list/back button, Pause and Resume (app.js buildUI, pauseGame, resumeGame)
+mote-absorb.opus | absorb | Soft wet plip, a tiny droplet sinking into a jelly surface | Player absorbs a nutrient mote (stats.p0.motes rose this tick, app.js afterTick)
+pellet-gulp.opus | pellet | Small quick underwater gulp, a soft bubble pop | Player absorbs an ejected pellet (stats.p0.pellets rose)
+cell-absorb-big.opus | absorbBig | Deep resonant membrane thump with a wet squelch, a large jelly body engulfing another | Player absorbs a rival cell (stats.p0.rivalCells rose); paired with camera shake 2.5
+cell-split.opus | split | Quick wet tearing squelch, a soft elastic body ripping in two | Player divides (Space / Split button; stats.p0.splits rose)
+mass-eject.opus | eject | Short wet spurt, a puff of fluid ejected underwater | Player ejects pellets (E / Eject button; stats.p0.ejects rose)
+barb-burst.opus | burst | Sharp popping crack of a taut membrane bursting, splashy snap | A player cell of 60+ mass bursts on a barb (stats.p0.barbBursts rose); camera shake 4
+danger-ping.opus | danger | Single low ominous sonar ping resonating underwater | Hint engine reports 'flee' (larger cell within 200 units); throttled to one ping per 2.2 s
+countdown-beep.opus | countdown | Short neutral electronic countdown beep, clean and even | Bound in audio.js; no round countdown exists yet (see spec: design intent)
+round-start-go.opus | go | Bright rising chime, an energetic start signal | Round begins (app.js startRound, every mode, Retry and Restart included)
+time-rewind.opus | rewind | Whooshing reverse sweep, a tape rewinding swirl | Bound in audio.js; practice rewind is not implemented yet (see spec: design intent)
+goal-win.opus | win | Short triumphant ascending chime fanfare of four bright notes | Results overlay for terminalReason goal-complete or last-cell
+round-lose.opus | lose | Three soft descending disappointed tones, gently deflating | Results overlay for eliminated, constraint-violated or surrender
+time-up.opus | timeup | Three flat buzzer beeps signaling time expired | Results overlay for terminalReason time-up (goal met or not)
+achievement-unlock.opus | achievement | Sparkling three-note reward chime, bright and celebratory | Bound in audio.js; achievements are not awarded yet (see spec: design intent)
+cell-merge.opus | merge | Soft wet slurp of two jelly blobs fusing together into one, gentle suction and a rounded low plop | Two of the player's split halves recombine after the 20 s merge timer (stats.p0.merges rose)
+hint-ping.opus | hint | Gentle bright glassy ping with a soft watery shimmer tail, a helpful notification chime underwater | Hint requested (H / Hint button) as the hint ring appears on the arena
+ambience-medium.opus | ambience | Continuous quiet underwater ambience inside a warm petri dish, slow fluid movement, tiny distant bubbles, soft muffled low hum, seamless 12 s loop | Ambience bus loop started on the first user gesture; cross-fades in over the procedural noise bed (audio.js startAmbience)

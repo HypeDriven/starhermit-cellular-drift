@@ -172,7 +172,7 @@
     });
     state.stats[opts.id] = {
       motes: 0, pellets: 0, rivalMass: 0, rivalCells: 0,
-      peakMass: 0, spawnedMass: 0, survivedTicks: 0, splits: 0, ejects: 0, barbBursts: 0
+      peakMass: 0, spawnedMass: 0, survivedTicks: 0, splits: 0, ejects: 0, barbBursts: 0, merges: 0
     };
   }
 
@@ -747,6 +747,7 @@
         if (dist2(A.x, A.y, B.x, B.y) < ra * ra) {
           A.mass += B.mass;
           removed[B.id] = true;
+          if (state.stats[A.playerId]) state.stats[A.playerId].merges = (state.stats[A.playerId].merges || 0) + 1;
         }
       }
     }

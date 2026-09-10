@@ -43,6 +43,16 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
 /* Menu/overlay screens sit above the canvas; give text a legible backdrop.
    The HUD is the exception: the playfield must show through. */
 .cd-screen:not(.cd-hud) { background: rgba(4, 19, 27, 0.82); }
+/* Title key art: authored backdrop under a scrim so the wordmark stays legible;
+   the plain scrim still paints if the image fails to load. High contrast drops it. */
+.cd-screen.cd-title {
+  background: linear-gradient(rgba(4, 19, 27, 0.55), rgba(4, 19, 27, 0.7)),
+    url(../assets/title-backdrop.webp) center / cover no-repeat, #04131b;
+}
+.cd-hc .cd-screen.cd-title { background: rgba(4, 19, 27, 0.95); }
+/* Results hero illustration: small, never the tallest thing on the screen */
+.cd-resultart { width: min(300px, 60vw); height: auto; max-height: 20vh; object-fit: cover; border-radius: 14px; opacity: 0.95; }
+.cd-hc .cd-resultart { display: none; }
 
 .cd-btn:focus-visible, input:focus-visible { outline: 2px solid #9bf6e4; outline-offset: 2px; }
 .cd-btn:disabled { opacity: 0.45; cursor: default; }

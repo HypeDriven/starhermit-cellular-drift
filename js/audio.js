@@ -1,5 +1,6 @@
 /*
- * Cellular Drift — audio: WebAudio procedural synth, no assets.
+ * Cellular Drift — audio: WebAudio buses with sampled Opus clips and a
+ * procedural synth fallback (see sfx/manifest.txt for the event table).
  * Buses: music / effects / ambience / voice, independent gains.
  * Short transients are tied to logical game events; variants are seeded so
  * replays sound identical. Captions are emitted through onCaption for the UI.
@@ -69,18 +70,32 @@ export function createAudio(opts) {
     win: 'goal-win',
     lose: 'round-lose',
     timeup: 'time-up',
-    achievement: 'achievement-unlock'
+    achievement: 'achievement-unlock',
+    merge: 'cell-merge',
+    hint: 'hint-ping',
+    ambience: 'ambience-medium'   // 12 s loop, used by startAmbience (never one-shot)
+  };
+  // Text cues for meaningful audio (captions setting); shown whether a sample or the synth plays.
+  const CAPTIONS = {
+    absorb: 'absorbed a mote', pellet: 'absorbed a pellet', absorbBig: 'absorbed a rival cell',
+    split: 'split', eject: 'ejected mass', burst: 'burst on a barb', danger: 'larger cell nearby',
+    merge: 'cells recombined', hint: 'hint', go: 'round start', rewind: 'rewound',
+    win: 'goal complete', lose: 'absorbed', timeup: 'time up', achievement: 'achievement unlocked'
   };
   const sampleCache = {}; // event name -> { state: 'loading'|'ready'|'failed', buffer }
+
+  function fetchBuffer(name) {
+    return fetch('./sfx/' + SAMPLES[name] + '.opus')
+      .then((r) => { if (!r.ok) throw new Error('http ' + r.status); return r.arrayBuffer(); })
+      .then((ab) => ctx.decodeAudioData(ab));
+  }
 
   function loadSample(name) {
     const entry = sampleCache[name];
     if (entry) return entry;
     const fresh = { state: 'loading', buffer: null };
     sampleCache[name] = fresh;
-    fetch('./sfx/' + SAMPLES[name] + '.opus')
-      .then((r) => { if (!r.ok) throw new Error('http ' + r.status); return r.arrayBuffer(); })
-      .then((ab) => ctx.decodeAudioData(ab))
+    fetchBuffer(name)
       .then((buf) => { fresh.buffer = buf; fresh.state = 'ready'; })
       .catch(() => { fresh.state = 'failed'; });
     return fresh;
@@ -189,13 +204,22 @@ export function createAudio(opts) {
       const t = ensureCtx() && ctx.currentTime;
       [784, 988, 1319].forEach((f, i) => blip('effects', f, 0.25, 'sine', 0.16, t + i * 0.09));
       caption('achievement unlocked');
+    },
+    merge() { // split halves recombine: soft inward slurp
+      blip('effects', 240 * variant(), 0.18, 'sine', 0.16, 0, 90);
+      blip('effects', 120 * variant(), 0.22, 'triangle', 0.1, 0, -40);
+      caption(CAPTIONS.merge);
+    },
+    hint() { // hint marker shown: glassy ping
+      blip('effects', 1046 * variant(), 0.14, 'sine', 0.1, 0, 120);
+      caption(CAPTIONS.hint);
     }
   };
 
   function play(name) {
-    if (!started || settings.muted) { if (events[name]) caption(name); return; }
     if (!events[name]) return;
-    if (playSample(name)) { caption(name); return; }
+    if (!started || settings.muted) { if (CAPTIONS[name]) caption(CAPTIONS[name]); return; }
+    if (playSample(name)) { if (CAPTIONS[name]) caption(CAPTIONS[name]); return; }
     events[name]();
   }
 
@@ -216,11 +240,28 @@ export function createAudio(opts) {
     lfo.connect(lfoG); lfoG.connect(f.frequency);
     src.connect(f); f.connect(g); g.connect(buses.ambience);
     src.start(); lfo.start();
-    ambienceNodes = { src, lfo, g };
+    ambienceNodes = { src, lfo, g, loop: null };
+    // authored medium loop (sfx/ambience-medium.opus) cross-fades in over the
+    // synth bed once decoded; the bed stays as the fallback if the fetch fails
+    const mine = ambienceNodes;
+    fetchBuffer('ambience').then((buf) => {
+      if (ambienceNodes !== mine || !ctx) return;
+      const loop = ctx.createBufferSource();
+      loop.buffer = buf; loop.loop = true;
+      const lg = ctx.createGain();
+      const t = ctx.currentTime;
+      lg.gain.setValueAtTime(0.0001, t);
+      lg.gain.exponentialRampToValueAtTime(0.8, t + 2.5);
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.exponentialRampToValueAtTime(0.08, t + 2.5);
+      loop.connect(lg); lg.connect(buses.ambience);
+      loop.start();
+      mine.loop = loop;
+    }).catch(() => {});
   }
   function stopAmbience() {
     if (!ambienceNodes) return;
-    try { ambienceNodes.src.stop(); ambienceNodes.lfo.stop(); } catch {}
+    try { ambienceNodes.src.stop(); ambienceNodes.lfo.stop(); if (ambienceNodes.loop) ambienceNodes.loop.stop(); } catch {}
     ambienceNodes = null;
   }
 
