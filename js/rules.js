@@ -860,6 +860,14 @@
     var mine = cellsOf(state, playerId);
     var big = mine[0];
     for (var i = 0; i < mine.length; i++) if (mine[i].mass > big.mass) big = mine[i];
+    // active lesson objectives come before generic arena advice
+    var goal = state.config && state.config.goal;
+    if (goal && goal.type === 'reach-marker' && !objectiveMet(state, playerId)) {
+      return { action: 'reach', x: goal.x || 0, y: goal.y || 0, text: 'Drift to the glowing marker to finish the lesson.' };
+    }
+    if (goal && goal.type === 'split-then-mass' && state.stats[playerId].splits < (goal.splits || 1) && legal.split.ok) {
+      return { action: 'split', x: big.x, y: big.y, text: 'Split now — the lesson asks for a split first.' };
+    }
     // nearest threat
     var threat = null, threatD2 = Infinity;
     var prey = null, preyD2 = Infinity;

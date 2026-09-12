@@ -411,9 +411,21 @@ export function createRenderer(canvas, opts) {
     // camera follow with critically damped smoothing (never cumulative lerp drift)
     if (focus) {
       const k = 1 - Math.exp(-CAM.FOLLOW_RATE * dt);
-      camState.x += (focus.x - camState.x) * k;
-      camState.y += (focus.y - camState.y) * k;
-      const targetHalf = Math.max(CAM.MIN_HALF_H, Math.min(CAM.MAX_HALF_H, CAM.BASE_HALF_H + focus.radius * CAM.MASS_ZOOM * 8));
+      let fx = focus.x, fy = focus.y;
+      let targetHalf = CAM.BASE_HALF_H + focus.radius * CAM.MASS_ZOOM * 8;
+      if (focus.include) {
+        // Fit both the player and the included point (goal marker) in view,
+        // with a margin for the HUD bands, and centre between them.
+        const inc = focus.include;
+        const minX = Math.min(focus.x - focus.radius, inc.x - inc.radius), maxX = Math.max(focus.x + focus.radius, inc.x + inc.radius);
+        const minY = Math.min(focus.y - focus.radius, inc.y - inc.radius), maxY = Math.max(focus.y + focus.radius, inc.y + inc.radius);
+        fx = (minX + maxX) / 2; fy = (minY + maxY) / 2;
+        const needH = (maxY - minY) / 2 / 0.7, needW = (maxX - minX) / 2 / (0.9 * aspect);
+        targetHalf = Math.max(targetHalf, needH, needW);
+      }
+      camState.x += (fx - camState.x) * k;
+      camState.y += (fy - camState.y) * k;
+      targetHalf = Math.max(CAM.MIN_HALF_H, Math.min(CAM.MAX_HALF_H, targetHalf));
       const kz = 1 - Math.exp(-CAM.ZOOM_RATE * dt);
       if (Math.abs(targetHalf - camState.halfH) > 0.5) {
         camState.halfH += (targetHalf - camState.halfH) * kz;

@@ -599,7 +599,14 @@ function computeFocus() {
   let big = 0;
   const cells = R.cellsOf(game, 'p0');
   for (const cell of cells) if (cell.mass > big) big = cell.mass;
-  return { x: c.x, y: c.y, radius: R.radiusOf(Math.max(big, R.START_MASS)) };
+  const focus = { x: c.x, y: c.y, radius: R.radiusOf(Math.max(big, R.START_MASS)) };
+  // Reach-marker goals: frame the player and the whole marker ring together
+  // so the destination is always on screen (narrow portrait included).
+  const g = game.config && game.config.goal;
+  if (g && g.type === 'reach-marker' && game.phase === 'active') {
+    focus.include = { x: g.x || 0, y: g.y || 0, radius: (g.radius || 40) * 1.15 };
+  }
+  return focus;
 }
 
 // ---------- per-tick: event audio from stat diffs, adaptive intensity ----------
@@ -757,7 +764,7 @@ function showResults() {
   const boards = S.loadBoards();
   boards.entries.push(entry);
   S.saveBoards(boards);
-  if (platform) platform.submitScore(entry);
+  const submitted = platform ? platform.submitScore(entry) : Promise.resolve(false);
 
   // build the results panel
   const r = ui.result;
@@ -775,6 +782,13 @@ function showResults() {
   if (earned.length) {
     r.appendChild(el('p', { class: 'cd-sub' }, ['🏅 Achievement unlocked: ' + earned.join(', ')]));
   }
+  // Submission status: the result is always kept on this device; say so
+  // plainly when the ranked board did not accept it.
+  const syncLine = el('p', { class: 'cd-sub', 'aria-live': 'polite' }, [platform ? 'Submitting score…' : 'Score saved on this device.']);
+  r.appendChild(syncLine);
+  Promise.resolve(submitted).then(ok => {
+    syncLine.textContent = ok ? 'Score submitted to the ranked board.' : 'Ranked board unavailable — score saved on this device.';
+  }).catch(() => { syncLine.textContent = 'Ranked board unavailable — score saved on this device.'; });
   const retry = el('button', { class: 'cd-btn cd-itembtn' }, ['Retry']);
   retry.addEventListener('click', () => { audio.play('ui'); startRound(currentContent, currentMode); });
   r.appendChild(retry);

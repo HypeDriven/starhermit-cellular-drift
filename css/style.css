@@ -74,9 +74,12 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
 /* captions / text cues for meaningful audio */
 .cd-captions {
   position: absolute; left: 50%; transform: translateX(-50%);
-  bottom: max(16px, env(safe-area-inset-bottom));
+  /* own row above the action tray: never over the Split/Eject/Hint labels */
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px);
+  width: min(92vw, 36rem); text-align: center;
   pointer-events: none; font-size: 0.95em; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
 }
+.cd-captions:not(:empty) { background: rgba(0,0,0,0.45); border-radius: 8px; padding: 4px 10px; }
 
 /* results score breakdown */
 .cd-breakdown { display: grid; grid-template-columns: auto auto; gap: 4px 18px; margin: 0; text-align: left; }
