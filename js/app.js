@@ -74,7 +74,19 @@ async function boot() {
   window.addEventListener('resize', () => renderer.resize());
   audio = createAudio(settings());
   platform = createPlatform();
+  window.CDPlatform = platform; // store.js mirrors saves through this hook
+  try { await platform.init(); } catch (e) {}
   try { await platform.syncTime(); } catch (e) {}
+  if (platform.hosted) {
+    // Remote save wins over the local cache; the doc stays checksummed.
+    platform.fetchProfile().then(renderAccountLine).catch(() => {});
+    platform.loadCloud().then((remoteRaw) => {
+      const remoteDoc = S.loadRaw(remoteRaw);
+      if (remoteDoc) S.save(remoteDoc); // local cache mirrors the remote doc
+      renderAccountLine();
+    });
+    platform.onSync(renderAccountLine);
+  }
 
   // first user gesture unlocks WebAudio (autoplay policy)
   const unlock = () => { audio.unlock(); };
@@ -119,7 +131,8 @@ function buildUI(root) {
   // ---- title / home ----
   const titleScreen = el('section', { class: 'cd-screen cd-title' }, [
     el('h1', { class: 'cd-game-title' }, ['Cellular Drift']),
-    el('p', { class: 'cd-tagline' }, ['A realtime mass arena. Move, absorb, split, eject — and manage the threats that hunt you.'])
+    el('p', { class: 'cd-tagline' }, ['A realtime mass arena. Move, absorb, split, eject — and manage the threats that hunt you.']),
+    el('p', { id: 'cd-account', class: 'cd-sub' }, [''])
   ]);
   const playBtn = el('button', { class: 'cd-btn cd-play' }, ['Play']);
   playBtn.addEventListener('click', () => { audio.play('ui'); showModeSelect(); });
@@ -388,6 +401,22 @@ function showScreen(name) {
 }
 
 function showTitle() { showScreen('title'); }
+
+// Account + cloud-sync status line on the title screen. Offline keeps the
+// identical local-only behaviour; hosted shows the account nickname.
+function renderAccountLine() {
+  const node = document.getElementById('cd-account');
+  if (!node || !platform) return;
+  if (!platform.hosted) {
+    node.textContent = 'Offline — progress saves on this device.';
+    return;
+  }
+  const name = platform.profile ? platform.profile.name : '…';
+  const syncTxt = platform.sync === 'synced' ? 'progress synced'
+    : platform.sync === 'saving' ? 'saving…'
+    : 'cloud sync unavailable';
+  node.textContent = 'Playing as ' + name + ' · ' + syncTxt;
+}
 function showModeSelect() { showScreen('modesel'); }
 function showLessons() { showScreen('lessons'); }
 function showJourney() { showScreen('journey'); }
@@ -700,7 +729,25 @@ function showResults() {
   lt.cellsAbsorbed += g.stats.p0.rivalCells;
   lt.splits += g.stats.p0.splits;
   lt.playMs += durationMs;
+
+  // Achievements (idempotent, local — part of the cloud-saved doc).
+  const ACH_DEFS = [
+    ['first-round', () => lt.rounds >= 1, 'First drift'],
+    ['first-goal', () => lt.goals >= 1, 'Objective met'],
+    ['first-win', () => lt.wins >= 1, 'Arena champion'],
+    ['rounds-25', () => lt.rounds >= 25, 'Persistent cell'],
+    ['cells-250', () => lt.cellsAbsorbed >= 250, 'Absorber'],
+    ['splits-100', () => lt.splits >= 100, 'Divider']
+  ];
+  const earned = [];
+  for (const [key, test, label] of ACH_DEFS) {
+    if (!doc.progress.achievements[key] && test()) {
+      doc.progress.achievements[key] = Date.now();
+      earned.push(label);
+    }
+  }
   S.save(doc);
+  if (earned.length) audio.play('achievement');
 
   // leaderboard (local + host when available)
   const entry = {
@@ -725,6 +772,9 @@ function showResults() {
   }
   r.appendChild(list);
   r.appendChild(el('p', { class: 'cd-total' }, ['Total score: ' + bd.total + ' · Rank ' + bd.rank + '/' + g.players.length + (bd.objectiveMet ? ' · objective met' : '')]));
+  if (earned.length) {
+    r.appendChild(el('p', { class: 'cd-sub' }, ['🏅 Achievement unlocked: ' + earned.join(', ')]));
+  }
   const retry = el('button', { class: 'cd-btn cd-itembtn' }, ['Retry']);
   retry.addEventListener('click', () => { audio.play('ui'); startRound(currentContent, currentMode); });
   r.appendChild(retry);

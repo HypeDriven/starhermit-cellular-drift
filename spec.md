@@ -260,11 +260,14 @@ Manifest `starhermit.txt`: `name=Cellular Drift`, `launch=index.html`, `owner=�
 | Server script | yes | `server.js`: same-origin static hosting with `Cache-Control: no-cache` + ETag revalidation, refuses `tests/`, `tools/`, `node_modules/` and dotfiles; `GET /api/v1/time` → `{now}`; `POST /api/v1/scores` (≤ 16 KB JSON, in-memory ring of 10 000); `GET /api/v1/scores?content=<id>` |
 | Server time | yes | `platform.syncTime()` at boot with a 2.5 s abort; the daily descriptor is chosen from server-adjusted time; falls back to the local clock |
 | Score submission | yes | every terminal round posts `{contentId, score, objective, invalid, durationMs, sessionId}`; a copy goes to the local board in `localStorage` |
-| Identity / profile / presence | no | player is always "You"; no token handling; nothing personal is stored |
+| Launch token / identity | yes | `#game_token=<jwt>` read from the URL fragment (stripped after the read; query `?token=` kept for local dev), decoded for `sub` + `game_scope` (never hard-coded), kept in memory only and sent as `Authorization: Bearer`; re-minted every 45 min via `POST /api/v1/games/{slug}/launch-token` (60 s retry). Hosted mode activates iff a token was read |
+| Profile / account line | yes | `GET /api/v1/users/{sub}/profile` → nickname (never usernames, never `/api/v1/me`; `Player <id8>` fallback); the title screen shows "Playing as <nickname> · sync status". Offline the line says progress stays on this device |
+| Server time | yes | `platform.syncTime()` at boot with a 2.5 s abort; the daily descriptor is chosen from server-adjusted time; falls back to the local clock |
+| Score submission | yes | every terminal round posts `{contentId, score, objective, invalid, durationMs, sessionId}` (Bearer when hosted) to the own-server route; a copy goes to the local board in `localStorage`; failures are swallowed silently (no console errors when the route 404s off-platform) |
 | Leaderboard display, friends boards | no | entries are submitted and stored but no screen reads them |
-| Achievements | no | `progress.achievements` exists in the save document but is never written |
+| Achievements | local | six idempotent keys (`first-round`, `first-goal`, `first-win`, `rounds-25`, `cells-250`, `splits-100`) unlock from lifetime stats at round end, play the `achievement` clip, and are stored in the save document — no platform unlock endpoint |
 | Realtime rooms, invitations, chat, voice, relay | no | single-player only; rivals are local AI |
-| Cloud save | no | progress is local `localStorage` only |
+| Cloud save | yes | the checksummed save doc mirrors to one zip+base64 slot at `GET/PUT /api/v1/me/cloud-saves/{slug}`: remote wins on boot (validated through `CDStore.loadRaw`), saves debounce 2 s and flush on `pagehide`/hidden with keepalive, and the title line shows sync status. localStorage stays the offline cache |
 
 ## 13. Technical architecture
 
@@ -302,7 +305,7 @@ QA bar (agents/qa.md) as checkable statements: (1) Lesson 1's brief tells a new 
 ## 16. Known limitations
 
 - English only; no string table (§10).
-- `countdown`, `rewind` and `achievement` clips are bound in `audio.js` but no code path triggers them; `progress.achievements` is never written.
+- `countdown` and `rewind` clips are bound in `audio.js` but no code path triggers them; the `achievement` clip now plays on local unlocks.
 - Scores are posted and stored locally but no screen shows a leaderboard; the server store is in-memory and lost on restart; submissions are not validated server-side.
 - Settings `graphicsTier`, `theme`, `largeText`, `leftHanded`, `haptics`, `boardMirror` and `confirmActions` are persisted with defaults but have no UI and (except `graphicsTier`/`theme`) no effect.
 - The `voice` bus and its slider control nothing audible.

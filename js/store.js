@@ -2,10 +2,10 @@
  * Never stores credentials or tokens. Browser global: window.CDStore.
  */
 (function (root, factory) {
-  var api = factory();
+  var api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.CDStore = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : this, function (root) {
   'use strict';
 
   var SAVE_VERSION = 1;
@@ -64,17 +64,24 @@
 
   var memoryFallback = null; // used when localStorage is unavailable
 
+  // Parses a wrapped {sum, payload} string into a migrated doc; null when the
+  // checksum fails. Used for both the local cache and the cloud mirror
+  // (remote-preferred load goes through here).
+  function loadRaw(raw) {
+    if (raw == null) return null;
+    try {
+      var doc = JSON.parse(raw);
+      if (!doc || doc.sum !== checksum(doc.payload)) return null; // corrupt
+      return migrate(JSON.parse(doc.payload));
+    } catch (e) { return null; }
+  }
+
   function load() {
     var raw = null;
     try { raw = localStorage.getItem(KEY); } catch (e) { /* private mode */ }
     if (raw == null && memoryFallback) raw = memoryFallback;
-    if (raw == null) return fresh();
-    try {
-      var doc = JSON.parse(raw);
-      if (!doc || doc.sum !== checksum(doc.payload)) return fresh(); // corrupt → clean slate
-      var migrated = migrate(JSON.parse(doc.payload));
-      return migrated || fresh();
-    } catch (e) { return fresh(); }
+    var doc = loadRaw(raw);
+    return doc || fresh();
   }
 
   function save(doc) {
@@ -83,6 +90,8 @@
     var wrapped = JSON.stringify({ sum: checksum(payload), payload: payload });
     memoryFallback = wrapped;
     try { localStorage.setItem(KEY, wrapped); } catch (e) { /* memory fallback keeps session */ }
+    if (root.CDPlatform && typeof root.CDPlatform.onLocalSave === 'function')
+      root.CDPlatform.onLocalSave(wrapped); // host adapter mirrors to the cloud slot
   }
 
   // ---------- leaderboards (local; host adapter may sync)
@@ -112,7 +121,7 @@
     SAVE_VERSION: SAVE_VERSION,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     load: load, save: save, fresh: fresh, migrate: migrate,
-    checksum: checksum,
+    checksum: checksum, loadRaw: loadRaw,
     loadBoards: loadBoards, saveBoards: saveBoards, sortEntries: sortEntries
   };
 });
