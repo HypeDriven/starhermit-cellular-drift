@@ -15,7 +15,7 @@
   var DEFAULT_SETTINGS = {
     music: 0.6, effects: 0.9, ambience: 0.5, voice: 0.8,
     muted: false, captions: false,
-    graphicsTier: 'auto',       // auto | low | medium | high
+    graphics: {},               // Graphics panel: { preset, render_scale, adaptive, show_fps, <category> } ({} = Auto)
     theme: 'lagoon',
     reducedMotion: false,
     highContrast: false,

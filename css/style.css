@@ -87,3 +87,25 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
 .cd-breakdown dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .cd-total { font-weight: 600; }
 .cd-helptext { max-width: 60ch; text-align: left; }
+
+/* Graphics settings panel: one labelled control per row, scrolls inside the screen */
+.cd-gfxbody { display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(460px, 100%); }
+.cd-gfxrow { width: 100%; text-align: left; }
+.cd-gfxrow label { flex: 1 1 10em; min-width: 0; }
+.cd-graphics select {
+  flex: 1 1 13em; min-width: 0; max-width: 100%; min-height: 40px; padding: 6px 10px; box-sizing: border-box;
+  font: inherit; font-size: 0.95em; color: #eafcff; background: #0b2a33;
+  border: 1px solid rgba(79, 216, 194, 0.55); border-radius: 8px;
+}
+.cd-graphics input[type="checkbox"] { width: 22px; height: 22px; accent-color: #4fd8c2; }
+.cd-gfxscale { display: flex; align-items: center; gap: 8px; flex: 1 1 13em; min-width: 0; }
+.cd-gfxscale input { flex: 1 1 auto; min-width: 0; accent-color: #4fd8c2; }
+.cd-gfxscale output { min-width: 3.4em; text-align: right; font-variant-numeric: tabular-nums; }
+.cd-gfxsummary { margin: 4px 0 0; max-width: 100%; overflow-wrap: anywhere; }
+.cd-gfxnote { margin: 0; padding: 6px 10px; border-radius: 8px; background: rgba(255, 107, 129, 0.15); border: 1px solid rgba(255, 107, 129, 0.5); }
+.cd-graphics select:focus-visible { outline: 2px solid #9bf6e4; outline-offset: 2px; }
+.cd-fps {
+  position: fixed; left: max(8px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); z-index: 5;
+  padding: 2px 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.55); color: #9bf6e4;
+  font: 12px/1.4 ui-monospace, monospace; pointer-events: none;
+}

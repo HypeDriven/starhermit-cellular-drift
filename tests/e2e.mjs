@@ -208,6 +208,65 @@ async function runPass(browser, pass) {
     await visibleScreen(page, '.cd-title');
   });
 
+  await step(`${label}: Graphics settings: presets, override, persistence, keyboard`, async () => {
+    const gfxAttr = () => page.evaluate(() => document.body.getAttribute('data-gfx-preset'));
+    if ((await gfxAttr()) !== 'low') fail(`Auto on a software GPU should resolve to low, got ${await gfxAttr()}`);
+    await page.locator('#cd-open-graphics').click();
+    await visibleScreen(page, '.cd-graphics');
+    await assertLayout(page, label, 'graphics');
+    const autoText = await page.locator('#gfx-preset option[value="auto"]').textContent();
+    if (!/Auto \(detected: Low\)/.test(autoText || '')) fail(`Auto option label "${autoText}"`);
+    await page.locator('#gfx-preset').selectOption('low');
+    if ((await gfxAttr()) !== 'low') fail('Low preset not applied');
+    await page.locator('#gfx-preset').selectOption('high');
+    if ((await gfxAttr()) !== 'high') fail('High preset not applied');
+    await page.waitForTimeout(300);
+    let summary = (await page.locator('#gfx-summary').textContent()) || '';
+    if (!/2048² shadows/.test(summary) || !/glow/.test(summary) || !/\d+×\d+ px/.test(summary)) fail(`High summary "${summary}"`);
+    await page.locator('#gfx-bloom').selectOption('off');
+    summary = (await page.locator('#gfx-summary').textContent()) || '';
+    if (/glow/.test(summary)) fail(`bloom override not applied: "${summary}"`);
+    await page.screenshot({ path: SHOT('graphics', label) });
+    // survives a reload
+    await page.reload({ waitUntil: 'networkidle' });
+    await visibleScreen(page, '.cd-title');
+    if ((await gfxAttr()) !== 'high') fail('graphics preset did not survive reload');
+    await page.locator('#cd-open-graphics').click();
+    await visibleScreen(page, '.cd-graphics');
+    if ((await page.locator('#gfx-preset').inputValue()) !== 'high') fail('preset select not restored after reload');
+    if ((await page.locator('#gfx-bloom').inputValue()) !== 'off') fail('bloom override not restored after reload');
+    // choosing a preset clears overrides
+    await page.locator('#gfx-preset').selectOption('ultra');
+    if ((await gfxAttr()) !== 'ultra') fail('Ultra preset not applied');
+    if ((await page.locator('#gfx-bloom').inputValue()) !== 'preset') fail('choosing a preset did not clear the bloom override');
+    if (label === 'desktop') {
+      // Ultra must render the game correctly without console noise
+      await page.keyboard.press('Escape');
+      await visibleScreen(page, '.cd-title');
+      await startRoundVia(page, label, 'Practice', 'Calm');
+      await page.waitForTimeout(800);
+      await assertPlayerRendered(page, label, 'practice HUD at Ultra');
+      await page.screenshot({ path: SHOT('hud-ultra', label) });
+      await page.keyboard.press('Escape'); // pause (a software GPU at Ultra runs at a few fps)
+      await visibleScreen(page, '.cd-pause');
+      await page.locator('#cd-pause-graphics').click();
+      await visibleScreen(page, '.cd-graphics');
+    }
+    // keyboard: focus the quality select, pick Auto with the keyboard, Esc closes
+    await page.locator('#gfx-preset').focus();
+    await page.keyboard.press('Home');
+    await page.locator('#gfx-preset').selectOption('auto'); // Home is not honoured by every headless select
+    if ((await gfxAttr()) !== 'low') fail('Auto did not return to the detected preset');
+    await page.keyboard.press('Escape');
+    if (label === 'desktop') {
+      await visibleScreen(page, '.cd-pause');
+      await page.locator('.cd-pause .cd-btn', { hasText: 'Leave to modes' }).click();
+      await visibleScreen(page, '.cd-modesel');
+      await page.locator('.cd-modesel .cd-backbtn').click();
+    }
+    await visibleScreen(page, '.cd-title');
+  });
+
   await step(`${label}: mode select + every mode list lays out`, async () => {
     await page.locator('.cd-title .cd-play').click();
     await visibleScreen(page, '.cd-modesel');
@@ -299,6 +358,12 @@ async function runPass(browser, pass) {
     await page.screenshot({ path: SHOT('pause', label) });
     await page.waitForTimeout(400);
     if ((await debug(page)).tick !== t0) fail('simulation kept running while paused');
+    // Graphics panel from the pause menu, Back returns to the pause menu
+    await page.locator('#cd-pause-graphics').click();
+    await visibleScreen(page, '.cd-graphics');
+    await assertLayout(page, label, 'graphics (in game)');
+    await page.locator('#gfx-back').click();
+    await visibleScreen(page, '.cd-pause');
     await page.keyboard.press('Escape');
     await visibleScreen(page, '.cd-hud');
     await page.keyboard.press('Escape');

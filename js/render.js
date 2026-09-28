@@ -8,6 +8,15 @@
  * projected world targets.
  */
 import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { detectPreset, describe, resolve, SHADOW_MAP } from './gfx.js';
 
 export const CAM = {
   FOLLOW_RATE: 6.5,      // critically damped follow stiffness
@@ -18,9 +27,58 @@ export const CAM = {
   BASE_HALF_H: 46
 };
 
-const TIER_DPR = { low: 1, medium: 1.5, high: 2 };
-const TIER_PARTICLES = { low: 150, medium: 500, high: 1200 };
-const TIER_DECOR = { low: 40, medium: 110, high: 220 };
+// particle budgets per `particles` tier (burst FX cap, drifting plankton count)
+const TIER_PARTICLES = { low: 300, high: 1200 };
+const TIER_DECOR = { low: 60, high: 240 };
+
+// Colour grade + vignette (display-space colours in, display-space out).
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, uAmount: { value: 1.0 }, uVignette: { value: 0.26 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float uAmount; uniform float uVignette;
+    varying vec2 vUv;
+    void main() {
+      vec4 src = texture2D(tDiffuse, vUv);
+      vec3 c = src.rgb;
+      vec3 lc = clamp(c, 0.0, 1.0);
+      // gentle S-curve contrast, a touch more saturation, cool shadows / warm highlights
+      vec3 s = mix(lc, lc * lc * (3.0 - 2.0 * lc), 0.22);
+      float l = dot(s, vec3(0.299, 0.587, 0.114));
+      s = mix(vec3(l), s, 1.1);
+      s *= mix(vec3(0.95, 1.0, 1.06), vec3(1.04, 1.01, 0.96), smoothstep(0.25, 0.85, l));
+      s = s * 0.99 + 0.003;
+      c = mix(c, s + max(c - 1.0, 0.0), uAmount);
+      float d = length((vUv - 0.5) * vec2(1.0, 0.9));
+      c *= 1.0 - uVignette * smoothstep(0.38, 0.9, d);
+      gl_FragColor = vec4(c, src.a);
+    }`
+};
+
+// Caustic shimmer: light focused by the dish's liquid, drawn additively over the floor.
+const CAUSTIC_VERT = `
+  varying vec2 vPos;
+  void main() { vPos = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const CAUSTIC_FRAG = `
+  uniform float uTime; uniform float uRadius; uniform vec3 uColor; uniform float uStrength;
+  varying vec2 vPos;
+  float band(vec2 p, float t) {
+    vec2 q = p;
+    for (int i = 0; i < 3; i++) {
+      float fi = float(i) + 1.0;
+      q += vec2(sin(q.y * 1.3 / fi + t * 0.7 + fi), cos(q.x * 1.1 / fi - t * 0.6 + fi * 1.7)) * 0.9;
+    }
+    float v = abs(sin(q.x) * sin(q.y));
+    return pow(1.0 - v, 24.0);
+  }
+  void main() {
+    vec2 p = vPos / 38.0;
+    float c = band(p, uTime) * 0.65 + band(p * 1.7 + 3.1, uTime * 1.3) * 0.35;
+    float edge = 1.0 - smoothstep(uRadius * 0.82, uRadius, length(vPos));
+    gl_FragColor = vec4(uColor * c * uStrength * edge, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`;
 
 export function createRenderer(canvas, opts) {
   const options = Object.assign({ onContextLost: null, onContextRestored: null }, opts || {});
@@ -34,6 +92,20 @@ export function createRenderer(canvas, opts) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled = false;
+
+  // GPU identity drives the Auto preset (software renderers get Low).
+  let gpu = '';
+  try {
+    const gl = renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    gpu = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) || '';
+  } catch (e) { gpu = ''; }
+  const mobile = typeof matchMedia === 'function' && (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches)
+    || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  const detected = detectPreset(gpu, mobile);
+  let q = resolve({}, detected);
 
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 2000);
@@ -44,11 +116,28 @@ export function createRenderer(canvas, opts) {
   camera.layers.enable(0); camera.layers.enable(1); camera.layers.enable(2);
   camera.layers.enable(3); camera.layers.enable(4);
 
-  // ---------- lighting: one dominant key, soft fill
-  const ambient = new THREE.AmbientLight(0xffffff, 0.75);
-  const key = new THREE.DirectionalLight(0xffffff, 1.1);
-  key.position.set(-0.4, 0.6, 1);
-  scene.add(ambient, key);
+  // ---------- lighting: hemisphere fill (lamp above, agar below) + one warm key
+  // light from the upper left whose shadows fall down-right onto the dish floor.
+  const ambient = new THREE.AmbientLight(0xffffff, 0.3);
+  const hemi = new THREE.HemisphereLight(0xdff8ff, 0x0b2a33, 0.8);
+  hemi.position.set(0, 0, 1);
+  const key = new THREE.DirectionalLight(0xfff4e0, 1.2);
+  const KEY_DIR = new THREE.Vector3(-0.4, 0.6, 1).normalize();
+  key.position.copy(KEY_DIR).multiplyScalar(400);
+  key.shadow.bias = -0.0005;
+  key.shadow.normalBias = 0.02;
+  scene.add(ambient, hemi, key, key.target);
+
+  // image-based lighting (room environment) for glossy membranes; built on demand
+  let envTex = null;
+  function environmentTexture() {
+    if (!envTex) {
+      const pm = new THREE.PMREMGenerator(renderer);
+      envTex = pm.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+      pm.dispose();
+    }
+    return envTex;
+  }
 
   // ---------- theme
   let theme = {
@@ -59,28 +148,31 @@ export function createRenderer(canvas, opts) {
   let cvdPatch = null;
   let highContrast = false;
   let reducedMotion = false;
-  let tier = 'high';
   let decorSeed = 1;
 
   // ---------- environment: arena floor + boundary + membrane grid
   const envGroup = new THREE.Group();
   envGroup.layers.set(0);
   scene.add(envGroup);
-  let floorMesh = null, boundMesh = null, gridMesh = null, outsideMesh = null;
+  let floorMesh = null, boundMesh = null, gridMesh = null, outsideMesh = null, shadowMesh = null, causticMesh = null, glowMesh = null;
+  const causticUniforms = {
+    uTime: { value: 0 }, uRadius: { value: 600 }, uColor: { value: new THREE.Color(0xffffff) }, uStrength: { value: 0.05 }
+  };
 
   function themeColor(c) { return new THREE.Color(c); }
 
   function buildEnvironment(arenaRadius) {
-    for (const m of [floorMesh, boundMesh, gridMesh, outsideMesh]) {
-      if (m) { envGroup.remove(m); m.geometry.dispose(); if (m.material.map) m.material.map.dispose(); m.material.dispose(); }
+    for (const m of [floorMesh, boundMesh, gridMesh, outsideMesh, shadowMesh, causticMesh, glowMesh]) {
+      if (m) { envGroup.remove(m); m.geometry.dispose(); if (m.material.map) m.material.map.dispose(); if (m.material !== causticMat) m.material.dispose(); }
     }
+    const detailed = q.detail === 'detailed';
     // radial gradient floor texture (procedural, seeded decoration)
-    const size = 512;
+    const size = detailed ? 1024 : 512;
     const cv = document.createElement('canvas');
     cv.width = cv.height = size;
     const g = cv.getContext('2d');
     const grad = g.createRadialGradient(size / 2, size / 2, size * 0.05, size / 2, size / 2, size * 0.5);
-    grad.addColorStop(0, theme.bg);
+    grad.addColorStop(0, detailed ? '#' + new THREE.Color(theme.bg).lerp(new THREE.Color(theme.membrane), 0.02).getHexString() : theme.bg);
     grad.addColorStop(1, theme.bgDeep);
     g.fillStyle = grad;
     g.fillRect(0, 0, size, size);
@@ -98,6 +190,33 @@ export function createRenderer(canvas, opts) {
       g.beginPath(); g.arc(bx, by, r, 0, Math.PI * 2); g.fill();
     }
     g.globalAlpha = 1;
+    if (detailed) {
+      // agar detail: a pool of lamp light, ghost cell walls and fine grain
+      const pool = g.createRadialGradient(size * 0.42, size * 0.38, 0, size * 0.42, size * 0.38, size * 0.55);
+      pool.addColorStop(0, 'rgba(210,255,248,0.07)');
+      pool.addColorStop(1, 'rgba(210,255,248,0)');
+      g.fillStyle = pool; g.fillRect(0, 0, size, size);
+      g.strokeStyle = theme.membrane;
+      for (let i = 0; i < 90; i++) {
+        const r = 3 + rnd() * 10, bx = rnd() * size, by = rnd() * size;
+        g.globalAlpha = 0.04 + rnd() * 0.06;
+        g.lineWidth = 1 + rnd() * 1.5;
+        g.beginPath(); g.ellipse(bx, by, r, r * (0.7 + rnd() * 0.3), rnd() * Math.PI, 0, Math.PI * 2); g.stroke();
+      }
+      const img = g.getImageData(0, 0, size, size), d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const n = (rnd() - 0.5) * 7;
+        d[i] += n; d[i + 1] += n; d[i + 2] += n;
+      }
+      g.putImageData(img, 0, 0);
+      // glass wall: light caught just inside the rim
+      const wall = g.createRadialGradient(size / 2, size / 2, size * 0.44, size / 2, size / 2, size * 0.5);
+      wall.addColorStop(0, 'rgba(160,240,230,0)');
+      wall.addColorStop(1, 'rgba(160,240,230,0.10)');
+      g.globalAlpha = 1;
+      g.fillStyle = wall; g.fillRect(0, 0, size, size);
+    }
+    g.globalAlpha = 1;
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace;
 
@@ -107,6 +226,24 @@ export function createRenderer(canvas, opts) {
     );
     floorMesh.position.z = -10;
     envGroup.add(floorMesh);
+
+    // shadow catcher: the floor keeps its authored colours, shadows only darken it
+    shadowMesh = new THREE.Mesh(
+      new THREE.CircleGeometry(arenaRadius, 96),
+      new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.42 })
+    );
+    shadowMesh.position.z = -9.8;
+    shadowMesh.receiveShadow = true;
+    shadowMesh.visible = q.shadows !== 'off';
+    envGroup.add(shadowMesh);
+
+    // caustic shimmer (additive, animated when `background` is animated)
+    causticUniforms.uRadius.value = arenaRadius;
+    causticUniforms.uColor.value.set(theme.membrane).lerp(new THREE.Color(0xffffff), 0.5);
+    causticMesh = new THREE.Mesh(new THREE.CircleGeometry(arenaRadius, 96), causticMat);
+    causticMesh.position.z = -9.6;
+    causticMesh.visible = q.background === 'animated';
+    envGroup.add(causticMesh);
 
     // dark surround outside the dish
     outsideMesh = new THREE.Mesh(
@@ -124,6 +261,23 @@ export function createRenderer(canvas, opts) {
     boundMesh.position.z = -8;
     envGroup.add(boundMesh);
 
+    // soft halo just outside the rim (the lit glass wall of the dish)
+    glowMesh = new THREE.Mesh(
+      new THREE.RingGeometry(arenaRadius + 2.5, arenaRadius + 22, 128, 1),
+      new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+        uniforms: { uColor: { value: themeColor(theme.membrane) }, uInner: { value: arenaRadius + 2.5 }, uOuter: { value: arenaRadius + 22 } },
+        vertexShader: 'varying vec2 vPos; void main() { vPos = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `uniform vec3 uColor; uniform float uInner; uniform float uOuter; varying vec2 vPos;
+          void main() { float t = (length(vPos) - uInner) / (uOuter - uInner); gl_FragColor = vec4(uColor * pow(1.0 - clamp(t, 0.0, 1.0), 2.2) * 0.35, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          }`
+      })
+    );
+    glowMesh.position.z = -8.2;
+    envGroup.add(glowMesh);
+
     // faint concentric membrane rings (depth cue)
     const rings = [];
     for (let i = 1; i <= 4; i++) {
@@ -138,6 +292,11 @@ export function createRenderer(canvas, opts) {
     gridMesh.position.z = -8.5;
     envGroup.add(gridMesh);
   }
+
+  const causticMat = new THREE.ShaderMaterial({
+    uniforms: causticUniforms, vertexShader: CAUSTIC_VERT, fragmentShader: CAUSTIC_FRAG,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+  });
 
   // minimal ring-merge (rings are the only merged static geometry)
   function mergeGeometries(geoms) {
@@ -163,18 +322,35 @@ export function createRenderer(canvas, opts) {
   const cellViews = new Map(); // entityId -> {group, outer, nucleus, rim, hueKey}
   const materialCache = new Map();
 
+  // Membrane edge light: a view-space fresnel term added to the emissive so the
+  // flattened sphere reads as a translucent wall with a bright rim.
+  function addMembraneRim(mat, strength) {
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uRim = { value: strength };
+      shader.fragmentShader = 'uniform float uRim;\n' + shader.fragmentShader.replace('#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\n  float cdRim = pow(1.0 - clamp(abs(normal.z), 0.0, 1.0), 2.5);\n  totalEmissiveRadiance += diffuseColor.rgb * cdRim * uRim;');
+    };
+    mat.customProgramCacheKey = () => 'cd-membrane-' + strength;
+  }
+
   function membraneMaterial(hue, isPlayer) {
-    const key = hue + (isPlayer ? 'p' : '') + (highContrast ? 'h' : '');
+    const detailed = q.detail === 'detailed';
+    const key = hue + (isPlayer ? 'p' : '') + (highContrast ? 'h' : '') + (detailed ? 'd' : '');
     if (materialCache.has(key)) return materialCache.get(key);
     const base = isPlayer ? themeColor(theme.player) : new THREE.Color().setHSL(hue / 360, highContrast ? 0.95 : 0.62, highContrast ? 0.6 : 0.55);
-    const mat = new THREE.MeshPhongMaterial({
+    const common = {
       color: base,
       transparent: true,
-      opacity: highContrast ? 0.95 : 0.82,
-      shininess: 90,
-      specular: new THREE.Color(0xffffff).multiplyScalar(0.55),
-      emissive: base.clone().multiplyScalar(0.16)
-    });
+      opacity: highContrast ? 0.95 : 0.84,
+      roughness: 0.32,
+      metalness: 0,
+      emissive: base.clone().multiplyScalar(0.2),
+      envMapIntensity: 0.55
+    };
+    const mat = detailed
+      ? new THREE.MeshPhysicalMaterial(Object.assign(common, { roughness: 0.28, clearcoat: 0.8, clearcoatRoughness: 0.15, iridescence: 0.25, iridescenceIOR: 1.3, sheen: 0.2, sheenColor: base.clone().lerp(new THREE.Color(0xffffff), 0.5) }))
+      : new THREE.MeshStandardMaterial(common);
+    addMembraneRim(mat, detailed ? 1.1 : 0.8);
     materialCache.set(key, mat);
     return mat;
   }
@@ -183,6 +359,7 @@ export function createRenderer(canvas, opts) {
     const group = new THREE.Group();
     const outer = new THREE.Mesh(cellGeo, membraneMaterial(hue, isPlayer));
     outer.scale.z = 0.42;
+    outer.castShadow = true;
     group.add(outer);
     const nuc = new THREE.Mesh(nucleusGeo, new THREE.MeshBasicMaterial({
       color: themeColor('#ffffff'), transparent: true, opacity: highContrast ? 0.55 : 0.3
@@ -191,7 +368,7 @@ export function createRenderer(canvas, opts) {
     nuc.position.z = 0.2;
     group.add(nuc);
     const rim = new THREE.Mesh(rimGeo, new THREE.MeshBasicMaterial({
-      color: isPlayer ? themeColor(theme.player) : new THREE.Color().setHSL(hue / 360, 0.8, 0.7),
+      color: (isPlayer ? themeColor(theme.player) : new THREE.Color().setHSL(hue / 360, 0.8, 0.7)).multiplyScalar(1.4),
       transparent: true, opacity: 0, side: THREE.DoubleSide
     }));
     rim.position.z = 0.5;
@@ -204,8 +381,10 @@ export function createRenderer(canvas, opts) {
 
   // ---------- motes & pellets (instanced)
   const MAX_MOTES = 420, MAX_PELLETS = 160;
-  const moteMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.5, 1), new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 40, emissive: 0x333333 }), MAX_MOTES);
-  const pelletMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.9, 1), new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 60, emissive: 0x444444 }), MAX_PELLETS);
+  // motes glow (emissive above the bloom threshold) so food reads at a glance
+  const moteMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.5, 1), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, emissive: 0x333333, emissiveIntensity: 1 }), MAX_MOTES);
+  const pelletMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.9, 1), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, emissive: 0x444444 }), MAX_PELLETS);
+  moteMesh.castShadow = true; pelletMesh.castShadow = true;
   moteMesh.layers.set(1); pelletMesh.layers.set(1);
   moteMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   pelletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -228,10 +407,24 @@ export function createRenderer(canvas, opts) {
   const barbViews = new Map();
 
   // ---------- decorative drift particles (never raycast; cosmetic only)
+  // soft round sprite shared by plankton and burst particles
+  const dotTex = (() => {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 32;
+    const g = cv.getContext('2d');
+    const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gr.addColorStop(0, 'rgba(255,255,255,1)');
+    gr.addColorStop(0.45, 'rgba(255,255,255,0.75)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
   let decorPoints = null;
   function buildDecor(arenaRadius) {
     if (decorPoints) { scene.remove(decorPoints); decorPoints.geometry.dispose(); decorPoints.material.dispose(); }
-    const n = TIER_DECOR[tier] || 100;
+    const n = TIER_DECOR[q.particles] || 100;
     const pos = new Float32Array(n * 3);
     let s = decorSeed ^ 0x5f3759df;
     const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
@@ -244,7 +437,7 @@ export function createRenderer(canvas, opts) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     decorPoints = new THREE.Points(geo, new THREE.PointsMaterial({
-      color: themeColor(theme.membrane), size: 2.2, transparent: true, opacity: 0.35, sizeAttenuation: false
+      color: themeColor(theme.membrane), size: 4, map: dotTex, transparent: true, opacity: 0.4, depthWrite: false, sizeAttenuation: false
     }));
     decorPoints.layers.set(0);
     scene.add(decorPoints);
@@ -256,7 +449,7 @@ export function createRenderer(canvas, opts) {
   const fxPos = new Float32Array(MAX_FX * 3);
   fxGeo.setAttribute('position', new THREE.BufferAttribute(fxPos, 3));
   const fxPoints = new THREE.Points(fxGeo, new THREE.PointsMaterial({
-    color: 0xffffff, size: 3, transparent: true, opacity: 0.9, sizeAttenuation: true
+    color: 0xffffff, size: 4.5, map: dotTex, transparent: true, opacity: 0.95, depthWrite: false, sizeAttenuation: true
   }));
   fxPoints.layers.set(3);
   fxPoints.frustumCulled = false;
@@ -266,7 +459,7 @@ export function createRenderer(canvas, opts) {
 
   function spawnFx(x, y, count, color, speed) {
     if (reducedMotion) count = Math.min(count, 3);
-    const cap = TIER_PARTICLES[tier] || MAX_FX;
+    const cap = TIER_PARTICLES[q.particles] || MAX_FX;
     fxPoints.material.color.set(color);
     fxColor.set(color);
     for (let i = 0; i < count && fx.n < cap; i++) {
@@ -303,7 +496,7 @@ export function createRenderer(canvas, opts) {
   const markerGroup = new THREE.Group();
   markerGroup.layers.set(2);
   const markerRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48), new THREE.MeshBasicMaterial({
-    color: 0xfff3a0, transparent: true, opacity: 0.85, side: THREE.DoubleSide
+    color: new THREE.Color(0xfff3a0).multiplyScalar(1.5), transparent: true, opacity: 0.85, side: THREE.DoubleSide
   }));
   markerGroup.add(markerRing);
   markerGroup.visible = false;
@@ -312,7 +505,7 @@ export function createRenderer(canvas, opts) {
   const hintGroup = new THREE.Group();
   hintGroup.layers.set(2);
   const hintRing = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 32), new THREE.MeshBasicMaterial({
-    color: 0x9be8ff, transparent: true, opacity: 0.9, side: THREE.DoubleSide
+    color: new THREE.Color(0x9be8ff).multiplyScalar(1.5), transparent: true, opacity: 0.9, side: THREE.DoubleSide
   }));
   hintGroup.add(hintRing);
   hintGroup.visible = false;
@@ -323,13 +516,151 @@ export function createRenderer(canvas, opts) {
   let arenaRadius = 600;
   let aspect = 1;
 
+  // ---------- output size: CSS size x min(dpr, 2) x preset scale x adaptive scale
+  let size = [0, 0], pixelRatio = 0, adaptiveScale = 1;
   function resize() {
     const w = canvas.clientWidth || canvas.parentElement.clientWidth || 1;
     const h = canvas.clientHeight || canvas.parentElement.clientHeight || 1;
     aspect = w / h;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, TIER_DPR[tier] || 2));
-    renderer.setSize(w, h, false);
+    const ratio = Math.min(window.devicePixelRatio || 1, 2) * q.scale * adaptiveScale;
+    if (w !== size[0] || h !== size[1] || ratio !== pixelRatio) {
+      size = [w, h];
+      pixelRatio = ratio;
+      renderer.setPixelRatio(ratio);
+      renderer.setSize(w, h, false);
+    }
     updateCameraFrustum();
+  }
+
+  // ---------- post-processing chain (rebuilt when its key changes)
+  let composer = null, postKey = null, postFailed = false;
+  function currentPostKey() {
+    return q.post ? [q.bloom, q.grade, q.antialias, size[0], size[1], pixelRatio].join('|') : 'none';
+  }
+  function buildPost() {
+    if (composer) { for (const p of composer.passes) if (p.dispose) p.dispose(); composer.dispose(); composer = null; }
+    if (!q.post || postFailed) return;
+    const [w, h] = size;
+    try {
+      const target = new THREE.WebGLRenderTarget(Math.max(1, Math.round(w * pixelRatio)), Math.max(1, Math.round(h * pixelRatio)), {
+        type: THREE.HalfFloatType, samples: q.antialias === 'msaa' ? 4 : 0
+      });
+      const c = new EffectComposer(renderer, target);
+      c.setPixelRatio(pixelRatio);
+      c.setSize(w, h);
+      c.addPass(new RenderPass(scene, camera));
+      if (q.bloom === 'on') {
+        // high threshold: only emissive motes, rims, rings and specular glints glow
+        c.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.45, 0.2, 0.9));
+      }
+      if (q.grade === 'on') c.addPass(new ShaderPass(GradeShader));
+      c.addPass(new OutputPass());
+      if (q.antialias === 'smaa') c.addPass(new SMAAPass(w * pixelRatio, h * pixelRatio));
+      if (q.antialias === 'fxaa') {
+        const fxaa = new ShaderPass(FXAAShader);
+        fxaa.material.uniforms.resolution.value.set(1 / (w * pixelRatio), 1 / (h * pixelRatio));
+        c.addPass(fxaa);
+      }
+      composer = c;
+    } catch (e) {
+      // post-processing is an enhancement: render directly and say so in the Graphics panel
+      postFailed = true;
+      composer = null;
+    }
+  }
+
+  // ---------- adaptive resolution + frame-rate readout
+  let frames = [], fps = 0, lastNow = 0;
+  function adapt(dtMs) {
+    frames.push(dtMs);
+    if (frames.length < 90) return false;
+    const avg = frames.reduce((a, b) => a + b, 0) / frames.length;
+    frames = [];
+    fps = 1000 / avg;
+    const el = document.getElementById('cd-fps');
+    if (el && !el.hidden) el.textContent = Math.round(fps) + ' fps · ' + (Math.round(pixelRatio * 100) / 100) + '×';
+    if (!q.adaptive) return false;
+    const before = adaptiveScale;
+    if (avg > 26) adaptiveScale = Math.max(0.6, Math.round((adaptiveScale - 0.1) * 100) / 100);
+    else if (avg < 14 && adaptiveScale < 1) adaptiveScale = Math.min(1, Math.round((adaptiveScale + 0.05) * 100) / 100);
+    return before !== adaptiveScale;
+  }
+  function fpsVisible(on) {
+    let el = document.getElementById('cd-fps');
+    if (on && !el) {
+      el = document.createElement('div');
+      el.id = 'cd-fps';
+      el.className = 'cd-fps';
+      el.setAttribute('aria-hidden', 'true');
+      el.textContent = '… fps';
+      document.body.appendChild(el);
+    }
+    if (el) el.hidden = !on;
+  }
+
+  // Key-light shadow box fitted to the visible part of the dish, snapped to
+  // whole texels so camera follow does not make shadow edges shimmer.
+  function fitShadow() {
+    if (!key.castShadow) return;
+    const sh = key.shadow;
+    const halfW = camState.halfH * aspect;
+    const extent = Math.min(arenaRadius + 30, Math.hypot(halfW, camState.halfH) + 30);
+    const texel = (extent * 2) / (sh.mapSize.x || 1024);
+    const tx = Math.round(camState.x / texel) * texel, ty = Math.round(camState.y / texel) * texel;
+    key.target.position.set(tx, ty, 0);
+    key.position.set(tx + KEY_DIR.x * 400, ty + KEY_DIR.y * 400, KEY_DIR.z * 400);
+    key.target.updateMatrixWorld();
+    if (sh.camera.right !== extent) {
+      Object.assign(sh.camera, { left: -extent, right: extent, top: extent, bottom: -extent, near: 1, far: 900 });
+      sh.camera.updateProjectionMatrix();
+    }
+  }
+
+  function renderFrame(dt) {
+    const now = performance.now();
+    const dtMs = lastNow ? Math.min(250, now - lastNow) : 16;
+    lastNow = now;
+    if (adapt(dtMs)) resize();
+    const k = currentPostKey();
+    if (k !== postKey) { postKey = k; buildPost(); }
+    fitShadow();
+    if (composer) composer.render(dt);
+    else renderer.render(scene, camera);
+  }
+
+  // Apply resolved graphics settings live (no reload).
+  function applyGraphics(saved) {
+    q = resolve(saved || {}, detected);
+    const mapSize = SHADOW_MAP[q.shadows];
+    renderer.shadowMap.enabled = mapSize > 0;
+    key.castShadow = mapSize > 0;
+    if (mapSize > 0 && key.shadow.mapSize.x !== mapSize) {
+      key.shadow.mapSize.set(mapSize, mapSize);
+      if (key.shadow.map) { key.shadow.map.dispose(); key.shadow.map = null; }
+    }
+    key.shadow.radius = q.shadows === 'high' ? 3 : 2;
+    scene.environment = q.reflections === 'on' ? environmentTexture() : null;
+    hemi.intensity = q.reflections === 'on' ? 0.6 : 0.8;
+    if (shadowMesh) shadowMesh.visible = mapSize > 0;
+    if (causticMesh) causticMesh.visible = q.background === 'animated';
+    adaptiveScale = 1;
+    frames = [];
+    postFailed = false;
+    postKey = null;
+    fpsVisible(q.showFps);
+    // membrane materials depend on `detail`; everything lit depends on shadow state
+    materialCache.forEach((m) => m.dispose());
+    materialCache.clear();
+    for (const [, v] of cellViews) scene.remove(v.group);
+    cellViews.clear();
+    scene.traverse((o) => {
+      if (!o.material) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.needsUpdate = true;
+    });
+    if (lastState) { buildEnvironment(arenaRadius); buildDecor(arenaRadius); }
+    resize();
+    document.body.setAttribute('data-gfx-preset', q.preset);
+    canvas.setAttribute('data-gfx-preset', q.preset);
   }
 
   function updateCameraFrustum() {
@@ -354,7 +685,11 @@ export function createRenderer(canvas, opts) {
 
   // Called on every simulation tick with the new immutable-ish snapshot.
   function syncState(state) {
-    prevMap = currMap;
+    // a new round (new rules state object) starts from a clean slate: no pop
+    // effects for the previous round's entities, and the dish, decor and barbs
+    // are rebuilt even when the arena radius is unchanged
+    const newRound = state !== lastState;
+    prevMap = newRound ? new Map() : currMap;
     currMap = entityMap(state);
     // pop effects for vanished entities
     if (prevMap.size) {
@@ -366,7 +701,7 @@ export function createRenderer(canvas, opts) {
       }
     }
     lastState = state;
-    if (state.arena.radius !== arenaRadius) {
+    if (newRound || state.arena.radius !== arenaRadius) {
       arenaRadius = state.arena.radius;
       buildEnvironment(arenaRadius);
       buildDecor(arenaRadius);
@@ -375,14 +710,15 @@ export function createRenderer(canvas, opts) {
   }
 
   function syncBarbs(state) {
-    for (const [id, v] of barbViews) { scene.remove(v); }
+    for (const [id, v] of barbViews) { scene.remove(v); v.material.dispose(); }
     barbViews.clear();
     for (const b of state.barbs) {
-      const mat = new THREE.MeshPhongMaterial({
-        color: themeColor(theme.barb), shininess: 30,
-        emissive: themeColor(theme.barb).multiplyScalar(0.25)
+      const mat = new THREE.MeshStandardMaterial({
+        color: themeColor(theme.barb), roughness: 0.45, metalness: 0.1,
+        emissive: themeColor(theme.barb).multiplyScalar(0.3), envMapIntensity: 0.6
       });
       const mesh = new THREE.Mesh(barbGeo, mat);
+      mesh.castShadow = true;
       mesh.scale.setScalar(b.radius);
       mesh.position.set(b.x, b.y, 0.5);
       mesh.layers.set(1);
@@ -405,7 +741,7 @@ export function createRenderer(canvas, opts) {
   let time = 0;
   function draw(alpha, dt, focus, localPlayerId) {
     time += dt;
-    if (!lastState) { renderer.render(scene, camera); return; }
+    if (!lastState) { renderFrame(dt); return; }
     const state = lastState;
 
     // camera follow with critically damped smoothing (never cumulative lerp drift)
@@ -489,7 +825,7 @@ export function createRenderer(canvas, opts) {
     moteMesh.count = mi;
     moteMesh.instanceMatrix.needsUpdate = true;
     moteMesh.material.color.set(theme.motes[0]);
-    moteMesh.material.emissive.set(theme.motes[1]).multiplyScalar(0.25);
+    moteMesh.material.emissive.set(theme.motes[1]).multiplyScalar(0.3);
 
     // pellets (instanced)
     let pi = 0;
@@ -505,6 +841,7 @@ export function createRenderer(canvas, opts) {
     pelletMesh.count = pi;
     pelletMesh.instanceMatrix.needsUpdate = true;
     pelletMesh.material.color.set(theme.motes[2] || '#ffffff');
+    pelletMesh.material.emissive.set(theme.motes[2] || '#ffffff').multiplyScalar(0.45);
 
     // barbs: slow menacing spin
     if (!reducedMotion) {
@@ -521,13 +858,14 @@ export function createRenderer(canvas, opts) {
       hintGroup.scale.setScalar(6 * (1 + Math.sin(time * 4) * 0.15));
     }
 
-    // decor drift
+    // decor drift + caustic shimmer (frozen under reduced motion)
     if (decorPoints && !reducedMotion) {
       decorPoints.rotation.z = time * 0.008;
     }
+    if (!reducedMotion) causticUniforms.uTime.value = time * 0.6;
 
     updateFx(dt);
-    renderer.render(scene, camera);
+    renderFrame(dt);
   }
 
   function hueOf(state, playerId) {
@@ -585,10 +923,16 @@ export function createRenderer(canvas, opts) {
         syncBarbs(lastState);
       }
     },
-    setTier(t2) {
-      tier = TIER_DPR[t2] ? t2 : 'high';
-      resize();
-      if (lastState) buildDecor(arenaRadius);
+    /** Apply saved graphics settings ({} = Auto); changes take effect immediately. */
+    setGraphics(saved) { applyGraphics(saved); },
+    /** What the Graphics panel shows: GPU, auto choice, resolved tiers, cost summary. */
+    graphicsInfo() {
+      const px = [Math.round(size[0] * pixelRatio), Math.round(size[1] * pixelRatio)];
+      return {
+        gpu: gpu || 'unknown GPU', detected, mobile, resolved: q,
+        summary: describe(q, px), pixels: px, fps: Math.round(fps),
+        adaptiveScale, postFailed
+      };
     },
     setReducedMotion(v) { reducedMotion = v; },
     setHighContrast(v) {

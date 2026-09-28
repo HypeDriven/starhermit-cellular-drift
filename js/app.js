@@ -8,6 +8,10 @@ import * as THREE from 'three';
 import { createRenderer } from './render.js';
 import { createAudio } from './audio.js';
 import { createPlatform } from './platform.js';
+import { CATEGORIES, PRESETS, SHADOW_MAP, presetTier, withPreset } from './gfx.js';
+import { gfxStrings } from './gfx-i18n.js';
+
+const T = gfxStrings(); // Graphics panel strings, locale from navigator.language
 
 const R = window.CDRules;
 const C = window.CDContent;
@@ -115,8 +119,27 @@ function applyPresentationSettings() {
   renderer.setReducedMotion(!!st.reducedMotion);
   renderer.setHighContrast(!!st.highContrast);
   document.body.classList.toggle('cd-hc', !!st.highContrast); // CSS: drops decorative backdrops
-  if (st.graphicsTier && st.graphicsTier !== 'auto') renderer.setTier(st.graphicsTier);
+  applyGraphicsSettings();
   applyTheme(currentContent);
+}
+
+// Graphics settings live in the save document (settings.graphics); the renderer
+// is only rebuilt when they actually change.
+let lastGfxJson = null;
+function gfxSettings() { return Object.assign({}, settings().graphics || {}); }
+function applyGraphicsSettings() {
+  const g = gfxSettings();
+  const json = JSON.stringify(g);
+  if (json === lastGfxJson) return;
+  lastGfxJson = json;
+  renderer.setGraphics(g);
+}
+function saveGraphics(g) {
+  const doc = S.load();
+  doc.settings = Object.assign({}, doc.settings, { graphics: g });
+  S.save(doc);
+  applyGraphicsSettings();
+  refreshGraphicsPanel();
 }
 
 function applyTheme(content) {
@@ -140,6 +163,9 @@ function buildUI(root) {
   const helpBtn = el('button', { class: 'cd-btn' }, ['Help & rules']);
   helpBtn.addEventListener('click', () => { audio.play('ui'); showScreen('help'); });
   titleScreen.appendChild(helpBtn);
+  const gfxBtn = el('button', { class: 'cd-btn', id: 'cd-open-graphics' }, [T('graphics')]);
+  gfxBtn.addEventListener('click', () => { audio.play('ui'); showGraphics('title'); });
+  titleScreen.appendChild(gfxBtn);
 
   // ---- mode select (learn / journey / daily / practice / challenge) ----
   const modeSel = el('section', { class: 'cd-screen cd-modesel' }, [
@@ -246,6 +272,9 @@ function buildUI(root) {
   const leaveBtn = el('button', { class: 'cd-btn cd-itembtn' }, ['Leave to modes']);
   leaveBtn.addEventListener('click', () => { endSession(); showModeSelect(); });
   pause.appendChild(leaveBtn);
+  const pauseGfxBtn = el('button', { class: 'cd-btn cd-itembtn', id: 'cd-pause-graphics' }, [T('graphics')]);
+  pauseGfxBtn.addEventListener('click', () => { audio.play('ui'); showGraphics('pause'); });
+  pause.appendChild(pauseGfxBtn);
   function settingRow(label, key) {
     const row = el('div', { class: 'cd-setrow' });
     row.appendChild(el('span', {}, [label]));
@@ -294,6 +323,8 @@ function buildUI(root) {
   contrastChk.addEventListener('change', onToggleChange);
   cvdChk.addEventListener('change', onToggleChange);
 
+  const graphics = buildGraphicsPanel();
+
   // ---- results overlay (populated per round in showResults) ----
   const result = el('section', { class: 'cd-screen cd-result', 'aria-live': 'polite' }, [el('h2', {}, ['Results'])]);
 
@@ -323,6 +354,7 @@ function buildUI(root) {
   root.appendChild(pause);
   root.appendChild(result);
   root.appendChild(help);
+  root.appendChild(graphics);
 
   ui.titleScreen = titleScreen;
   ui.modeSel = modeSel;
@@ -335,6 +367,7 @@ function buildUI(root) {
   ui.pause = pause;
   ui.result = result;
   ui.help = help;
+  ui.graphics = graphics;
   ui.objective = hud.querySelector('.cd-objective');
   ui.progress = hud.querySelector('.cd-progress');
   ui.captions = hud.querySelector('.cd-captions');
@@ -348,6 +381,123 @@ function buildUI(root) {
 
   // show title by default
   showScreen('title');
+}
+
+// ---------- Graphics settings panel (title screen and pause menu) ----------
+let gfxReturnTo = 'title';
+function tierLabel(tier) { return T('t_' + tier); }
+function presetLabel(p) { return T(p); }
+
+function buildGraphicsPanel() {
+  const panel = el('section', { class: 'cd-screen cd-graphics', 'aria-labelledby': 'gfx-heading' }, [
+    el('h2', { id: 'gfx-heading' }, [T('settingsTitle')])
+  ]);
+  const body = el('div', { class: 'cd-gfxbody' });
+  panel.appendChild(body);
+  function row(labelText, control, id) {
+    const r = el('div', { class: 'cd-setrow cd-gfxrow' });
+    r.appendChild(el('label', { for: id }, [labelText]));
+    r.appendChild(control);
+    body.appendChild(r);
+    return r;
+  }
+  // quality preset
+  const presetSel = el('select', { id: 'gfx-preset', 'data-gfx': 'preset' });
+  presetSel.appendChild(el('option', { value: 'auto' }, ['']));
+  for (const p of PRESETS) presetSel.appendChild(el('option', { value: p }, [presetLabel(p)]));
+  presetSel.addEventListener('change', () => saveGraphics(withPreset(gfxSettings(), presetSel.value)));
+  row(T('quality'), presetSel, 'gfx-preset');
+  // render scale 50–200 %
+  const scaleWrap = el('span', { class: 'cd-gfxscale' });
+  const scale = el('input', { type: 'range', id: 'gfx-scale', 'data-gfx': 'render_scale', min: '50', max: '200', step: '5', value: '100' });
+  const scaleOut = el('output', { for: 'gfx-scale', id: 'gfx-scale-out' }, ['100%']);
+  scaleWrap.appendChild(scale); scaleWrap.appendChild(scaleOut);
+  scale.addEventListener('input', () => { scaleOut.textContent = scale.value + '%'; });
+  scale.addEventListener('change', () => {
+    const g = gfxSettings();
+    g.render_scale = Math.round(+scale.value) / 100;
+    saveGraphics(g);
+  });
+  row(T('renderScale'), scaleWrap, 'gfx-scale');
+  // one select per category
+  const catSels = {};
+  for (const cat of Object.keys(CATEGORIES)) {
+    const sel = el('select', { id: 'gfx-' + cat, 'data-gfx-cat': cat });
+    sel.appendChild(el('option', { value: 'preset' }, ['']));
+    for (const tier of CATEGORIES[cat]) sel.appendChild(el('option', { value: tier }, [tierLabel(tier)]));
+    sel.addEventListener('change', () => {
+      const g = gfxSettings();
+      if (sel.value === 'preset') delete g[cat]; else g[cat] = sel.value;
+      saveGraphics(g);
+    });
+    catSels[cat] = sel;
+    row(T('cat_' + cat), sel, sel.id);
+  }
+  // toggles
+  function toggle(key, label, id, defaultOn) {
+    const inp = el('input', { type: 'checkbox', id, 'data-gfx': key });
+    inp.addEventListener('change', () => {
+      const g = gfxSettings();
+      if (inp.checked === defaultOn) delete g[key]; else g[key] = inp.checked;
+      saveGraphics(g);
+    });
+    row(label, inp, id);
+    return inp;
+  }
+  const adaptive = toggle('adaptive', T('adaptive'), 'gfx-adaptive', true);
+  const showFps = toggle('show_fps', T('showFps'), 'gfx-fps', false);
+  const summary = el('p', { class: 'cd-sub cd-gfxsummary', id: 'gfx-summary', 'aria-live': 'polite' }, ['']);
+  const note = el('p', { class: 'cd-gfxnote', id: 'gfx-note', role: 'status' }, [T('postFailed')]);
+  note.hidden = true;
+  body.appendChild(summary);
+  body.appendChild(note);
+  const back = el('button', { class: 'cd-btn cd-backbtn cd-itembtn', id: 'gfx-back' }, [T('back')]);
+  back.addEventListener('click', () => { audio.play('ui'); closeGraphics(); });
+  panel.appendChild(back);
+  ui.gfx = { presetSel, scale, scaleOut, catSels, adaptive, showFps, summary, note };
+  return panel;
+}
+
+function refreshGraphicsPanel() {
+  const g = ui.gfx;
+  if (!g || !renderer) return;
+  const saved = gfxSettings();
+  const info = renderer.graphicsInfo();
+  const r = info.resolved;
+  g.presetSel.options[0].textContent = T('auto', { tier: presetLabel(info.detected) });
+  g.presetSel.value = PRESETS.includes(saved.preset) ? saved.preset : 'auto';
+  const pct = Math.round((Number(saved.render_scale) || 1) * 100);
+  g.scale.value = String(Math.min(200, Math.max(50, pct)));
+  g.scaleOut.textContent = g.scale.value + '%';
+  for (const cat in g.catSels) {
+    const sel = g.catSels[cat];
+    sel.options[0].textContent = T('fromPreset', { tier: tierLabel(presetTier(r.preset, cat)) });
+    sel.value = CATEGORIES[cat].includes(saved[cat]) ? saved[cat] : 'preset';
+  }
+  g.adaptive.checked = saved.adaptive !== false;
+  g.showFps.checked = !!saved.show_fps;
+  const parts = [
+    info.gpu === 'unknown GPU' ? T('unknownGpu') : info.gpu,
+    r.shadows === 'off' ? T('s_noShadows') : T('s_shadows', { n: SHADOW_MAP[r.shadows] }),
+    r.bloom === 'on' ? T('s_bloom') : null,
+    r.grade === 'on' ? T('s_grade') : null,
+    r.reflections === 'on' ? T('s_reflections') : null,
+    r.antialias === 'off' ? T('s_noAA') : r.antialias.toUpperCase(),
+    info.pixels[0] + '×' + info.pixels[1] + ' px'
+  ];
+  g.summary.textContent = parts.filter(Boolean).join(' · ');
+  g.note.hidden = !info.postFailed;
+}
+
+function showGraphics(from) {
+  gfxReturnTo = from || 'title';
+  showScreen('graphics');
+  refreshGraphicsPanel();
+  // post-chain failures and pixel sizes settle after the next frame
+  requestAnimationFrame(() => requestAnimationFrame(refreshGraphicsPanel));
+}
+function closeGraphics() {
+  showScreen(gfxReturnTo === 'pause' && paused ? 'pause' : 'title');
 }
 
 // "done" badges reflect the save document at the moment a list is shown, so a
@@ -384,7 +534,8 @@ function showScreen(name) {
   const map = {
     'title': ui.titleScreen, 'modesel': ui.modeSel, 'lessons': ui.lessonList,
     'journey': ui.journeyList, 'daily': ui.dailySetup, 'practice': ui.pracSel,
-    'challenge': ui.chalList, 'hud': ui.hud, 'pause': ui.pause, 'result': ui.result, 'help': ui.help
+    'challenge': ui.chalList, 'hud': ui.hud, 'pause': ui.pause, 'result': ui.result, 'help': ui.help,
+    'graphics': ui.graphics
   };
   for (const k in map) {
     const s = map[k];
@@ -523,7 +674,9 @@ function wireInput() {
   window.addEventListener('keydown', (e) => {
     const tag = e.target && e.target.tagName;
     const inControl = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    if (e.key === 'Escape' && ui.graphics && ui.graphics.style.display !== 'none') { closeGraphics(); return; }
     if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+      if (ui.graphics && ui.graphics.style.display !== 'none') return;
       if (paused) resumeGame();
       else if (game && game.phase === 'active' && ui.hud.style.display !== 'none') pauseGame();
       return;
