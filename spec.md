@@ -329,3 +329,7 @@ QA bar (agents/qa.md) as checkable statements: (1) Lesson 1's brief tells a new 
 4. Achievements: first lesson set complete, first split-kill, 7-day daily streak, all mastery stages, 1 000 lifetime cells absorbed — unlocked idempotently with the `achievement` cue.
 5. A daily leaderboard screen reading `/api/v1/scores?content=<daily id>` with the store's tie-break order, and a friends filter once identity is wired.
 6. A pause-menu control for the theme.
+
+## Browser interference
+
+`browser-guard.js` (loaded from `index.html`) suppresses browser UI that gets in the way of play: the right-click context menu, the iOS long-press callout, copy / cut / paste, and page text selection. Text fields (inputs, textareas, selects, contenteditable) keep normal selection, context menu and clipboard behaviour.
