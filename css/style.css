@@ -109,3 +109,10 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
   padding: 2px 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.55); color: #9bf6e4;
   font: 12px/1.4 ui-monospace, monospace; pointer-events: none;
 }
+
+/* StarHermit confirmation toast (invite link copied, signed out) */
+.cd-toast {
+  position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  z-index: 1000; max-width: min(92vw, 34em); padding: 10px 16px; border-radius: 10px;
+  background: rgba(4, 19, 27, 0.94); border: 1px solid rgba(79, 216, 194, 0.55); color: #eafcff; text-align: center;
+}

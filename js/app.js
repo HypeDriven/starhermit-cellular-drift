@@ -10,8 +10,13 @@ import { createAudio } from './audio.js';
 import { createPlatform } from './platform.js';
 import { CATEGORIES, PRESETS, SHADOW_MAP, presetTier, withPreset } from './gfx.js';
 import { gfxStrings } from './gfx-i18n.js';
+import { platformStrings } from './platform-strings.js';
 
 const T = gfxStrings(); // Graphics panel strings, locale from navigator.language
+const PT = platformStrings(typeof navigator !== 'undefined' ? navigator.language : 'en-US'); // StarHermit UI strings
+
+// Preferences mirrored to the StarHermit settings KV.
+const SYNCED_SETTINGS = ['music', 'effects', 'ambience', 'voice', 'muted', 'captions', 'graphics', 'theme', 'reducedMotion', 'highContrast', 'cvdPalette', 'largeText'];
 
 const R = window.CDRules;
 const C = window.CDContent;
@@ -80,16 +85,32 @@ async function boot() {
   platform = createPlatform();
   window.CDPlatform = platform; // store.js mirrors saves through this hook
   try { await platform.init(); } catch (e) {}
-  try { await platform.syncTime(); } catch (e) {}
   if (platform.hosted) {
-    // Remote save wins over the local cache; the doc stays checksummed.
+    // Remote save wins over the local cache; the doc stays checksummed. The
+    // platform settings KV then wins over the saved preferences. Bounded so
+    // a slow host never holds the title screen.
     platform.fetchProfile().then(renderAccountLine).catch(() => {});
-    platform.loadCloud().then((remoteRaw) => {
+    const remote = Promise.all([platform.loadCloud(), platform.getSettings()]).then(([remoteRaw, kv]) => {
       const remoteDoc = S.loadRaw(remoteRaw);
-      if (remoteDoc) S.save(remoteDoc); // local cache mirrors the remote doc
-      renderAccountLine();
-    });
+      const doc = remoteDoc || S.load();
+      let changed = !!remoteDoc;
+      for (const k of SYNCED_SETTINGS) {
+        if (kv && kv[k] !== undefined && kv[k] !== null) { doc.settings[k] = kv[k]; changed = true; }
+      }
+      if (changed) S.save(doc); // local cache mirrors the remote doc
+    }).catch(() => {});
+    await Promise.race([remote, new Promise((r) => setTimeout(r, 3000))]);
     platform.onSync(renderAccountLine);
+  }
+  await platform.loadBindings();
+  platform.onAuth((a) => {
+    if (!a.signedIn) toast(PT.signedOut);
+    renderAccountLine();
+  });
+  if (audio) {
+    const st = settings();
+    audio.setVolumes({ music: st.music, effects: st.effects, ambience: st.ambience, voice: st.voice });
+    audio.setMuted(!!st.muted);
   }
 
   // first user gesture unlocks WebAudio (autoplay policy)
@@ -108,6 +129,7 @@ async function boot() {
   });
 
   buildUI(wrap);
+  renderAccountLine();
   applyPresentationSettings();
   wireInput();
   requestAnimationFrame(frame);
@@ -134,10 +156,30 @@ function applyGraphicsSettings() {
   lastGfxJson = json;
   renderer.setGraphics(g);
 }
+let settingsKvTimer = 0;
+function mirrorSettings() {
+  if (!platform || !platform.hosted) return;
+  clearTimeout(settingsKvTimer);
+  settingsKvTimer = setTimeout(() => {
+    const st = settings();
+    const patch = {};
+    for (const k of SYNCED_SETTINGS) if (st[k] !== undefined) patch[k] = st[k];
+    platform.patchSettings(patch);
+  }, 800);
+}
+
+function toast(msg) {
+  const host = document.querySelector('.cd-root') || document.body;
+  const t = el('div', { class: 'cd-toast', role: 'status' }, [msg]);
+  host.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
 function saveGraphics(g) {
   const doc = S.load();
   doc.settings = Object.assign({}, doc.settings, { graphics: g });
   S.save(doc);
+  mirrorSettings();
   applyGraphicsSettings();
   refreshGraphicsPanel();
 }
@@ -166,6 +208,16 @@ function buildUI(root) {
   const gfxBtn = el('button', { class: 'cd-btn', id: 'cd-open-graphics' }, [T('graphics')]);
   gfxBtn.addEventListener('click', () => { audio.play('ui'); showGraphics('title'); });
   titleScreen.appendChild(gfxBtn);
+  const inviteBtn = el('button', { class: 'cd-btn', id: 'cd-invite', hidden: '' }, [PT.invite]);
+  inviteBtn.addEventListener('click', async () => {
+    audio.play('ui');
+    const ok = await platform.copyInvite();
+    toast(ok ? PT.inviteCopied : PT.inviteFailed);
+  });
+  titleScreen.appendChild(inviteBtn);
+  const signInBtn = el('button', { class: 'cd-btn', id: 'cd-signin', hidden: '' }, [PT.signIn]);
+  signInBtn.addEventListener('click', () => { audio.play('ui'); platform.signIn(); });
+  titleScreen.appendChild(signInBtn);
 
   // ---- mode select (learn / journey / daily / practice / challenge) ----
   const modeSel = el('section', { class: 'cd-screen cd-modesel' }, [
@@ -304,6 +356,7 @@ function buildUI(root) {
   function onVolChange() {
     S.save(Object.assign(S.load(), { settings: Object.assign({}, S.load().settings, { music: +musicVol.value, effects: +fxVol.value, ambience: +ambVol.value, voice: +voiceVol.value }) }));
     if (audio) audio.setVolumes({ music: +musicVol.value, effects: +fxVol.value, ambience: +ambVol.value, voice: +voiceVol.value });
+    mirrorSettings();
   }
   function onToggleChange() {
     S.save(Object.assign(S.load(), { settings: Object.assign({}, S.load().settings, {
@@ -312,6 +365,7 @@ function buildUI(root) {
     }) }));
     if (audio) audio.setMuted(mutedChk.checked);
     applyPresentationSettings();
+    mirrorSettings();
   }
   musicVol.addEventListener('input', onVolChange);
   fxVol.addEventListener('input', onVolChange);
@@ -332,8 +386,8 @@ function buildUI(root) {
   const help = el('section', { class: 'cd-screen cd-help' }, [
     el('h2', {}, ['Help & rules']),
     el('div', { class: 'cd-helptext' }, [
-      el('p', {}, ['Steer your cell with the pointer (or arrow keys / WASD). Absorb nutrient motes, pellets, and cells at least 15% smaller than you to grow.']),
-      el('p', {}, ['Split (Space) launches half your mass forward to attack or travel. Eject (E) sheds pellets to feed allies or lighten up. Spiked barbs burst cells of 60+ mass — small cells slip by.']),
+      el('p', {}, ['Steer your cell with the pointer (or ' + ['up', 'left', 'down', 'right'].map((a) => platform.keyLabel(a)).join(', ') + '). Absorb nutrient motes, pellets, and cells at least 15% smaller than you to grow.']),
+      el('p', {}, ['Split (' + platform.keyLabel('split') + ') launches half your mass forward to attack or travel. Eject (' + platform.keyLabel('eject') + ') sheds pellets to feed allies or lighten up. Hint: ' + platform.keyLabel('hint') + '. Pause: ' + platform.keyLabel('pause') + '. Spiked barbs burst cells of 60+ mass — small cells slip by.']),
       el('p', {}, ['Pause with Esc or the Pause button. Rank is by mass and survival; ties break on objective completion, fewer invalid actions, then faster time.'])
     ]),
     (() => {
@@ -558,6 +612,10 @@ function showTitle() { showScreen('title'); }
 function renderAccountLine() {
   const node = document.getElementById('cd-account');
   if (!node || !platform) return;
+  const inv = document.getElementById('cd-invite');
+  const sib = document.getElementById('cd-signin');
+  if (inv) inv.hidden = !platform.hosted;
+  if (sib) sib.hidden = !platform.canSignIn();
   if (!platform.hosted) {
     node.textContent = 'Offline — progress saves on this device.';
     return;
@@ -674,24 +732,27 @@ function wireInput() {
   window.addEventListener('keydown', (e) => {
     const tag = e.target && e.target.tagName;
     const inControl = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    const action = platform.actionFor(e);
     if (e.key === 'Escape' && ui.graphics && ui.graphics.style.display !== 'none') { closeGraphics(); return; }
-    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (action === 'pause') {
       if (ui.graphics && ui.graphics.style.display !== 'none') return;
       if (paused) resumeGame();
       else if (game && game.phase === 'active' && ui.hud.style.display !== 'none') pauseGame();
       return;
     }
     if (inControl || !inPlay()) return;
-    if (e.key === ' ') { e.preventDefault(); doAction('split'); return; }
-    if (e.key === 'e' || e.key === 'E') { doAction('eject'); return; }
-    if (e.key === 'h' || e.key === 'H') { showHint(); return; }
-    const steerKeys = {
-      ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1,
-      w: 1, a: 1, s: 1, d: 1, W: 1, A: 1, S: 1, D: 1
-    };
-    if (steerKeys[e.key]) { e.preventDefault(); keysHeld.add(e.key.length === 1 ? e.key.toLowerCase() : e.key); }
+    if (action === 'split') { e.preventDefault(); doAction('split'); return; }
+    if (action === 'eject') { doAction('eject'); return; }
+    if (action === 'hint') { showHint(); return; }
+    if (action === 'up' || action === 'down' || action === 'left' || action === 'right') {
+      e.preventDefault();
+      keysHeld.add((e.code || e.key) + ':' + action);
+    }
   });
-  window.addEventListener('keyup', (e) => keysHeld.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
+  window.addEventListener('keyup', (e) => {
+    const action = platform.actionFor(e);
+    if (action) keysHeld.delete((e.code || e.key) + ':' + action);
+  });
   window.addEventListener('blur', () => keysHeld.clear());
 }
 
@@ -699,10 +760,11 @@ function wireInput() {
 function applyKeySteering() {
   if (!keysHeld.size || !inPlay()) return;
   let dx = 0, dy = 0;
-  if (keysHeld.has('ArrowUp') || keysHeld.has('w')) dy += 1;
-  if (keysHeld.has('ArrowDown') || keysHeld.has('s')) dy -= 1;
-  if (keysHeld.has('ArrowLeft') || keysHeld.has('a')) dx -= 1;
-  if (keysHeld.has('ArrowRight') || keysHeld.has('d')) dx += 1;
+  const held = (a) => [...keysHeld].some((k) => k.endsWith(':' + a));
+  if (held('up')) dy += 1;
+  if (held('down')) dy -= 1;
+  if (held('left')) dx -= 1;
+  if (held('right')) dx += 1;
   if (!dx && !dy) return;
   const c = R.centroid(game, 'p0');
   if (!c) return;

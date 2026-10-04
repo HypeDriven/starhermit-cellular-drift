@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test:e2e": "node tests/e2e.mjs",
-    "test": "node --test tests/gfx.test.mjs && node tests/rules-regression.mjs"
+    "test": "node --test tests/gfx.test.mjs tests/platform.test.mjs && node tests/rules-regression.mjs"
   },
   "devDependencies": {
     "playwright-core": "^1.62.1"
