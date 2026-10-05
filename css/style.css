@@ -6,6 +6,11 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
    Nothing is allowed to exceed the viewport — no document-level overflow. */
 .cd-root { position: fixed; inset: 0; overflow: hidden; }
 #cd-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+/* Large screens: every DOM layer over the full-viewport canvas (screens incl.
+   the HUD, fps meter, toast, boot-failure notice) zooms by --ui-scale
+   (ui-scale.js; exactly 1 up to 1600x1000); vw/vh inside them are divided by it.
+   The canvas is never zoomed. */
+.cd-screen, .cd-fps, .cd-toast, .cd-bootfail { zoom: var(--ui-scale, 1); }
 
 .cd-screen {
   position: absolute; inset: 0;
@@ -21,12 +26,12 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
 .cd-screen:not(.cd-hud) > :first-child { margin-top: auto; }
 .cd-screen:not(.cd-hud) > :last-child { margin-bottom: auto; }
 
-.cd-game-title { font-size: clamp(1.8rem, 6vw, 3.2rem); margin: 0; }
+.cd-game-title { font-size: clamp(1.8rem, calc(6vw / var(--ui-scale, 1)), 3.2rem); margin: 0; }
 .cd-tagline { max-width: 36em; margin: 0; }
 
 .cd-btn {
   min-width: 0; max-width: 100%; box-sizing: border-box;
-  padding: 12px 22px; font-size: clamp(0.95rem, 2.5vw, 1.1rem); font-family: inherit;
+  padding: 12px 22px; font-size: clamp(0.95rem, calc(2.5vw / var(--ui-scale, 1)), 1.1rem); font-family: inherit;
   background: rgba(79, 216, 194, 0.12); color: #eafcff;
   border: 1px solid rgba(79, 216, 194, 0.55); border-radius: 10px; cursor: pointer;
 }
@@ -51,7 +56,7 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
 }
 .cd-hc .cd-screen.cd-title { background: rgba(4, 19, 27, 0.95); }
 /* Results hero illustration: small, never the tallest thing on the screen */
-.cd-resultart { width: min(300px, 60vw); height: auto; max-height: 20vh; object-fit: cover; border-radius: 14px; opacity: 0.95; }
+.cd-resultart { width: min(300px, calc(60vw / var(--ui-scale, 1))); height: auto; max-height: calc(20vh / var(--ui-scale, 1)); object-fit: cover; border-radius: 14px; opacity: 0.95; }
 .cd-hc .cd-resultart { display: none; }
 
 .cd-btn:focus-visible, input:focus-visible { outline: 2px solid #9bf6e4; outline-offset: 2px; }
@@ -76,7 +81,7 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
   position: absolute; left: 50%; transform: translateX(-50%);
   /* own row above the action tray: never over the Split/Eject/Hint labels */
   bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px);
-  width: min(92vw, 36rem); text-align: center;
+  width: min(calc(92vw / var(--ui-scale, 1)), 36rem); text-align: center;
   pointer-events: none; font-size: 0.95em; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
 }
 .cd-captions:not(:empty) { background: rgba(0,0,0,0.45); border-radius: 8px; padding: 4px 10px; }
@@ -113,6 +118,6 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
 /* StarHermit confirmation toast (invite link copied, signed out) */
 .cd-toast {
   position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%);
-  z-index: 1000; max-width: min(92vw, 34em); padding: 10px 16px; border-radius: 10px;
+  z-index: 1000; max-width: min(calc(92vw / var(--ui-scale, 1)), 34em); padding: 10px 16px; border-radius: 10px;
   background: rgba(4, 19, 27, 0.94); border: 1px solid rgba(79, 216, 194, 0.55); color: #eafcff; text-align: center;
 }
