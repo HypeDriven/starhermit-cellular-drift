@@ -121,3 +121,4 @@ html, body { margin: 0; padding: 0; height: 100%; background: #071c26; color: #e
   z-index: 1000; max-width: min(calc(92vw / var(--ui-scale, 1)), 34em); padding: 10px 16px; border-radius: 10px;
   background: rgba(4, 19, 27, 0.94); border: 1px solid rgba(79, 216, 194, 0.55); color: #eafcff; text-align: center;
 }
+.cd-toast.cd-toast-top { bottom: auto; top: max(12px, env(safe-area-inset-top)); }

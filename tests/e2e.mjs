@@ -290,7 +290,8 @@ async function runPass(browser, pass) {
         for (let i = 0; i < 20; i++) await page.mouse.wheel(0, 800);
         const last = page.locator(`${sel} .cd-itembtn`).last();
         const box = await last.boundingBox();
-        if (!box || box.y + box.height > pass.viewport.height + 0.5 || box.y < 0) fail(`last journey stage not reachable by wheel scrolling: ${JSON.stringify(box)}`);
+        const vp = page.viewportSize();
+        if (!box || box.y + box.height > vp.height + 0.5 || box.y < 0) fail(`last journey stage not reachable by wheel scrolling: ${JSON.stringify(box)}`);
         await page.screenshot({ path: SHOT('journey-list-end', label) });
       }
       await page.locator(`${sel} .cd-backbtn`).click();

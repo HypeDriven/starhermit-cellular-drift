@@ -171,6 +171,9 @@ function mirrorSettings() {
 function toast(msg) {
   const host = document.querySelector('.cd-root') || document.body;
   const t = el('div', { class: 'cd-toast', role: 'status' }, [msg]);
+  // over the results/pause screens the bottom holds Retry/Back: show the toast at the top instead
+  const overScreen = [ui.result, ui.pause].some((s) => s && s.style.display !== 'none');
+  if (overScreen) t.classList.add('cd-toast-top');
   host.appendChild(t);
   setTimeout(() => t.remove(), 3500);
 }
