@@ -4,8 +4,8 @@
  * the launch token (#game_token / #access_token), renewal, the profile
  * nickname, the cloud-save slot game:<slug>, the settings KV, control
  * bindings, the invite link and sign-in. This adapter keeps the game's API
- * and adds server-time sync and score submission against the game's own
- * same-origin backend routes (server.js) — only probed when signed in.
+ * and adds server-time sync (the own-server /api/v1/time route) and posting
+ * finished rounds to the platform leaderboard — both only when signed in.
  * Standalone (no token) makes no network requests at all.
  */
 const SAVE_DEBOUNCE_MS = 2000;
@@ -93,30 +93,20 @@ export function createPlatform() {
     return new Date(Date.now() + timeOffsetMs);
   }
 
-  // Own-server backend routes (server.js): ranked scores, when reachable.
-  async function submitScore(entry) {
-    if (!reachable) return false;
+  // Platform leaderboard (score-script.js): post a finished round's total to
+  // the high-score board; resolves { posted, rank } (rank may be null).
+  async function submitScore(total) {
+    const s = sdk();
+    if (!s || !s.signedIn) return { posted: false, rank: null };
     try {
-      const res = await fetch('/api/v1/scores', {
-        method: 'POST',
-        headers: apiHeaders({ 'content-type': 'application/json' }),
-        body: JSON.stringify(entry)
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
-
-  async function fetchBoard(contentId) {
-    if (!reachable) return null;
-    try {
-      const res = await fetch('/api/v1/scores?content=' + encodeURIComponent(contentId), { cache: 'no-store', headers: apiHeaders() });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch {
-      return null;
-    }
+      const keys = await s.submitScores({ 'high-score': total });
+      if (!keys || keys.indexOf('high-score') < 0) return { posted: false, rank: null };
+      try {
+        const r = await s.leaderboard('high-score', { pageSize: 100 });
+        const me = (r.items || []).filter((i) => i.userId === s.userId)[0];
+        return { posted: true, rank: me ? me.rank : null };
+      } catch { return { posted: true, rank: null }; }
+    } catch { return { posted: false, rank: null }; }
   }
 
   // Cloud save: the SDK slot game:<slug> holds the wrapped {sum, payload}
@@ -203,7 +193,6 @@ export function createPlatform() {
     syncTime,
     now,
     submitScore,
-    fetchBoard,
     profileFor,
     fetchProfile,
     loadCloud,

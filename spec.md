@@ -15,7 +15,7 @@ This document describes Cellular Drift as it ships today. Present tense througho
 | Rendering | Three.js r160 (`vendor/three.module.js`, addons from the same release under `vendor/three/addons/`), orthographic top-down camera, optional post-processing, semantic HTML overlay for every menu and the HUD |
 | Simulation | Fixed 30 Hz deterministic step in `js/rules.js`; rendering interpolates between ticks |
 | Persistence | Versioned, checksummed `localStorage` document (`js/store.js`) |
-| Server | `server.js` — static files with revalidating headers, `/api/v1/time`, `/api/v1/scores` |
+| Server | `score-script.js` — StarHermit platform script that posts finished rounds to the leaderboard; `server.js` — local dev server: static files with revalidating headers, `/api/v1/time`, legacy `/api/v1/scores` (no longer called) |
 
 ### File map
 
@@ -32,7 +32,9 @@ This document describes Cellular Drift as it ships today. Present tense througho
 | `js/gfx-i18n.js` | Graphics panel strings for en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT; locale from `navigator.language` |
 | `vendor/three/addons/` | three r160 (npm 0.160.1) `EffectComposer`, `RenderPass`, `ShaderPass`, `OutputPass`, `UnrealBloomPass`, `SMAAPass`, `MaskPass`, `Pass`, their shaders, `RoomEnvironment` |
 | `js/audio.js` | WebAudio: 4 buses, sampled events with synth fallback, procedural pad music, ambience bed + authored loop, captions |
-| `js/platform.js` | Server-time sync with 2.5 s timeout, score POST, board GET |
+| `js/platform.js` | Adapter over `window.StarHermit`: server-time sync with 2.5 s timeout, leaderboard posting (`submitScore`) |
+| `js/platform-strings.js` | StarHermit UI strings (sign in, invite, toasts, leaderboard line) in the nine locales |
+| `score-script.js` | StarHermit platform script (`server=`): range-checks a round total and posts it to the `high-score` board (canonical copy in the games repo's `tools/score-script.js`) |
 | `css/style.css` | Layout shell, screens, buttons, HUD tray, captions, results breakdown, title/results art |
 | `sfx/` | 18 Opus clips; `manifest.txt` (canonical), `manifest.json` (generator input), `manifest.md` (generated) |
 | `assets/` | `title-backdrop.webp`, `results-vignette.webp` |
@@ -40,7 +42,7 @@ This document describes Cellular Drift as it ships today. Present tense througho
 | `tests/gfx.test.mjs` | `npm test` (node --test): GPU detection, preset/override/scale resolution, preset clears overrides, panel strings in every locale |
 | `tests/rules-regression.mjs` | `npm test`: determinism, duplicate rejection, constraint rule, content validation |
 | `tests/e2e.mjs` | `npm run test:e2e`: headless Chrome playthrough on 4 viewports through the real UI |
-| `starhermit.txt` | `name=Cellular Drift`, `launch=index.html`, `server=server.js`, `cover=coverart.png` |
+| `starhermit.txt` | `name=Cellular Drift`, `launch=index.html`, `server=score-script.js`, `cover=coverart.png` |
 
 ## 2. Vision and design pillars
 
@@ -256,7 +258,7 @@ The Graphics settings panel is localised into en-US, en-GB, es-419, es-ES, de-DE
 
 ## 12. StarHermit integration
 
-Manifest `starhermit.txt`: `name=Cellular Drift`, `launch=index.html`, `owner=…`, `cover=…`, `server=server.js`, plus one `control.<action>=<codes> | <label>` line per keyboard action. `index.html` loads `starhermit-sdk.js` (canonical client, shipped unchanged) and calls `StarHermit.init()` before any game script; `js/platform.js` is the game's adapter over `window.StarHermit`. Without a token the game makes no network requests and plays fully offline.
+Manifest `starhermit.txt`: `name=Cellular Drift`, `launch=index.html`, `owner=…`, `cover=…`, `server=score-script.js`, plus one `control.<action>=<codes> | <label>` line per keyboard action. `index.html` loads `starhermit-sdk.js` (canonical client, shipped unchanged) and calls `StarHermit.init()` before any game script; `js/platform.js` is the game's adapter over `window.StarHermit`. Without a token the game makes no network requests and plays fully offline.
 
 | Platform feature (wiki.starhermit.com conventions) | Used | How |
 |---|---|---|
@@ -268,11 +270,12 @@ Manifest `starhermit.txt`: `name=Cellular Drift`, `launch=index.html`, `owner=�
 | Settings KV | yes | volumes, mute, captions, graphics, theme, reduced motion, high contrast, colour-vision palette and large text are patched to the game's settings KV on change (debounced) and applied at boot, where the platform value wins |
 | Controls | yes | steer up/down/left/right, split, eject, hint and pause are declared in `starhermit.txt`; boot resolves `StarHermit.loadBindings()`, keydown/keyup route by `event.code` through the bindings, and Help shows the effective keys |
 | Invite link | yes | signed in, the title shows **Invite a friend**, copying `StarHermit.inviteLink()` with a confirmation toast |
-| Own-server routes | signed in only | `server.js` is the local Node server: `GET /api/v1/time` (server-adjusted daily, 2.5 s abort) and `POST /api/v1/scores` / `GET /api/v1/scores?content=`; only probed when signed in, local clock and local board otherwise |
-| Platform leaderboards, achievements | no | `server.js` is not a platform session script and reports no scores or achievements; achievements stay local (six keys in the save doc) |
+| Own-server routes | signed in only | `server.js` is the local Node server: `GET /api/v1/time` (server-adjusted daily, 2.5 s abort) is only probed when signed in, local clock otherwise; its legacy `/api/v1/scores` routes are no longer called |
+| Leaderboard | signed in only | every finished round outside Learn posts its total through `StarHermit.submitScores` (a practice session whose `score-script.js` posts it to the `high-score` board: integer, higher is better, 0–200,000); the results screen shows "Leaderboard rank: #N" (or posted / not posted). Standalone play posts nothing and shows no leaderboard line; every round still goes to the local board |
+| Platform achievements | no | achievements stay local (six keys in the save doc) |
 | Sessions, matchmaking, session invites, chat, replays, realtime, voice | no | single-player only; rivals are local AI |
 
-New platform UI strings (sign in, invite, toasts) ship in all nine locales (`js/platform-strings.js`, picked from `navigator.language`).
+New platform UI strings (sign in, invite, toasts, leaderboard line) ship in all nine locales (`js/platform-strings.js`, picked from `navigator.language`).
 
 ## 13. Technical architecture
 
@@ -311,7 +314,7 @@ QA bar (agents/qa.md) as checkable statements: (1) Lesson 1's brief tells a new 
 
 - English only apart from the Graphics panel (§10).
 - `countdown` and `rewind` clips are bound in `audio.js` but no code path triggers them; the `achievement` clip now plays on local unlocks.
-- Scores are posted and stored locally but no screen shows a leaderboard; the server store is in-memory and lost on restart; submissions are not validated server-side.
+- No in-game screen lists leaderboard entries; the results screen shows only the player's own rank, and `score-script.js` only range-checks the submitted total.
 - Settings `theme`, `largeText`, `leftHanded`, `haptics`, `boardMirror` and `confirmActions` are persisted with defaults but have no UI and (except `theme`) no effect.
 - Graphics settings are part of the cloud-saved document, so a preset chosen on one device follows the account to others.
 - The `voice` bus and its slider control nothing audible.

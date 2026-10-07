@@ -10,7 +10,7 @@ import { createAudio } from './audio.js';
 import { createPlatform } from './platform.js';
 import { CATEGORIES, PRESETS, SHADOW_MAP, presetTier, withPreset } from './gfx.js';
 import { gfxStrings } from './gfx-i18n.js';
-import { platformStrings } from './platform-strings.js';
+import { platformStrings, fmtPlatform } from './platform-strings.js';
 
 const T = gfxStrings(); // Graphics panel strings, locale from navigator.language
 const PT = platformStrings(typeof navigator !== 'undefined' ? navigator.language : 'en-US'); // StarHermit UI strings
@@ -982,7 +982,10 @@ function showResults() {
   const boards = S.loadBoards();
   boards.entries.push(entry);
   S.saveBoards(boards);
-  const submitted = platform ? platform.submitScore(entry) : Promise.resolve(false);
+  // Signed in: every finished round outside Learn posts its total to the
+  // platform high-score board (score-script.js).
+  const ranked = platform.hosted && currentMode !== 'learn';
+  const submitted = ranked ? platform.submitScore(bd.total) : null;
 
   // build the results panel
   const r = ui.result;
@@ -1000,13 +1003,15 @@ function showResults() {
   if (earned.length) {
     r.appendChild(el('p', { class: 'cd-sub' }, ['🏅 Achievement unlocked: ' + earned.join(', ')]));
   }
-  // Submission status: the result is always kept on this device; say so
-  // plainly when the ranked board did not accept it.
-  const syncLine = el('p', { class: 'cd-sub', 'aria-live': 'polite' }, [platform ? 'Submitting score…' : 'Score saved on this device.']);
-  r.appendChild(syncLine);
-  Promise.resolve(submitted).then(ok => {
-    syncLine.textContent = ok ? 'Score submitted to the ranked board.' : 'Ranked board unavailable — score saved on this device.';
-  }).catch(() => { syncLine.textContent = 'Ranked board unavailable — score saved on this device.'; });
+  // Leaderboard line (signed in only): posting → rank / posted / not posted.
+  if (submitted) {
+    const lbLine = el('p', { class: 'cd-sub', id: 'cd-results-lb', 'aria-live': 'polite' }, [PT.lbPosting]);
+    r.appendChild(lbLine);
+    submitted.then((res) => {
+      lbLine.textContent = !res.posted ? PT.lbNotPosted
+        : res.rank ? fmtPlatform(PT.lbRank, { rank: res.rank }) : PT.lbPosted;
+    }, () => { lbLine.textContent = PT.lbNotPosted; });
+  }
   const retry = el('button', { class: 'cd-btn cd-itembtn' }, ['Retry']);
   retry.addEventListener('click', () => { audio.play('ui'); startRound(currentContent, currentMode); });
   r.appendChild(retry);

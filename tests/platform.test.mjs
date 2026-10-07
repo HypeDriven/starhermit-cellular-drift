@@ -57,7 +57,7 @@ test('standalone: no token, no network', async () => {
     await p.patchSettings({ music: 1 });
     await p.loadBindings();
     assert.equal(p.actionFor({ code: 'KeyP' }), 'pause');
-    assert.equal(await p.submitScore({}), false);
+    assert.deepEqual(await p.submitScore(100), { posted: false, rank: null });
     assert.equal(p.inviteLink(), null);
     assert.equal(p.canSignIn(), false);
     assert.deepEqual(st.calls, []);

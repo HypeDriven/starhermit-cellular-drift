@@ -9,6 +9,10 @@ const EN_US = {
   inviteFailed: 'Could not copy the invite link.',
   signedOut: 'Signed out of StarHermit — progress keeps saving on this device.',
   signedInAs: 'Signed in as {name}',
+  lbPosting: 'Posting score to the leaderboard…',
+  lbRank: 'Leaderboard rank: #{rank}',
+  lbPosted: 'Score posted to the leaderboard.',
+  lbNotPosted: 'Score not posted to the leaderboard.',
 };
 const TABLE = {
   'en-US': EN_US,
@@ -20,6 +24,10 @@ const TABLE = {
     inviteFailed: 'No se pudo copiar el enlace de invitación.',
     signedOut: 'Sesión de StarHermit cerrada: el progreso se sigue guardando en este dispositivo.',
     signedInAs: 'Sesión iniciada como {name}',
+    lbPosting: 'Publicando la puntuación en la clasificación…',
+    lbRank: 'Puesto en la clasificación: #{rank}',
+    lbPosted: 'Puntuación publicada en la clasificación.',
+    lbNotPosted: 'No se pudo publicar la puntuación en la clasificación.',
   },
   'es-ES': {
     signIn: 'Iniciar sesión con StarHermit',
@@ -28,6 +36,10 @@ const TABLE = {
     inviteFailed: 'No se ha podido copiar el enlace de invitación.',
     signedOut: 'Sesión de StarHermit cerrada: el progreso se sigue guardando en este dispositivo.',
     signedInAs: 'Sesión iniciada como {name}',
+    lbPosting: 'Publicando la puntuación en la clasificación…',
+    lbRank: 'Puesto en la clasificación: #{rank}',
+    lbPosted: 'Puntuación publicada en la clasificación.',
+    lbNotPosted: 'No se ha podido publicar la puntuación en la clasificación.',
   },
   'de-DE': {
     signIn: 'Mit StarHermit anmelden',
@@ -36,6 +48,10 @@ const TABLE = {
     inviteFailed: 'Der Einladungslink konnte nicht kopiert werden.',
     signedOut: 'Von StarHermit abgemeldet – der Fortschritt wird weiter auf diesem Gerät gespeichert.',
     signedInAs: 'Angemeldet als {name}',
+    lbPosting: 'Punktzahl wird in die Bestenliste eingetragen…',
+    lbRank: 'Platz in der Bestenliste: #{rank}',
+    lbPosted: 'Punktzahl in die Bestenliste eingetragen.',
+    lbNotPosted: 'Punktzahl wurde nicht in die Bestenliste eingetragen.',
   },
   'fr-FR': {
     signIn: 'Se connecter avec StarHermit',
@@ -44,6 +60,10 @@ const TABLE = {
     inviteFailed: 'Impossible de copier le lien d’invitation.',
     signedOut: 'Déconnecté de StarHermit — la progression reste enregistrée sur cet appareil.',
     signedInAs: 'Connecté en tant que {name}',
+    lbPosting: 'Envoi du score au classement…',
+    lbRank: 'Rang au classement : #{rank}',
+    lbPosted: 'Score envoyé au classement.',
+    lbNotPosted: 'Score non envoyé au classement.',
   },
   'fr-CA': {
     signIn: 'Se connecter avec StarHermit',
@@ -52,6 +72,10 @@ const TABLE = {
     inviteFailed: 'Impossible de copier le lien d’invitation.',
     signedOut: 'Déconnecté de StarHermit — la progression reste enregistrée sur cet appareil.',
     signedInAs: 'Connecté en tant que {name}',
+    lbPosting: 'Envoi du pointage au classement…',
+    lbRank: 'Rang au classement : #{rank}',
+    lbPosted: 'Pointage envoyé au classement.',
+    lbNotPosted: 'Pointage non envoyé au classement.',
   },
   'pt-BR': {
     signIn: 'Entrar com StarHermit',
@@ -60,6 +84,10 @@ const TABLE = {
     inviteFailed: 'Não foi possível copiar o link de convite.',
     signedOut: 'Você saiu do StarHermit — o progresso continua salvo neste dispositivo.',
     signedInAs: 'Conectado como {name}',
+    lbPosting: 'Enviando pontuação para o placar…',
+    lbRank: 'Posição no placar: #{rank}',
+    lbPosted: 'Pontuação enviada para o placar.',
+    lbNotPosted: 'A pontuação não foi enviada para o placar.',
   },
   'it-IT': {
     signIn: 'Accedi con StarHermit',
@@ -68,6 +96,10 @@ const TABLE = {
     inviteFailed: 'Impossibile copiare il link di invito.',
     signedOut: 'Disconnesso da StarHermit: i progressi restano salvati su questo dispositivo.',
     signedInAs: 'Accesso eseguito come {name}',
+    lbPosting: 'Invio del punteggio alla classifica…',
+    lbRank: 'Posizione in classifica: #{rank}',
+    lbPosted: 'Punteggio inviato alla classifica.',
+    lbNotPosted: 'Punteggio non inviato alla classifica.',
   },
 };
 const ALIASES = { en: 'en-US', es: 'es-ES', de: 'de-DE', fr: 'fr-FR', pt: 'pt-BR', it: 'it-IT' };
