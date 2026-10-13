@@ -32,7 +32,7 @@ export function createAudio(opts) {
       const g = ctx.createGain();
       g.gain.value = settings.muted ? 0 : settings[name];
       g.connect(master);
-      buses[name] = g;
+      buses[name] = (globalThis.GameOptions ? globalThis.GameOptions.tagBus(g, name) : g);
     }
     return ctx;
   }
@@ -106,7 +106,7 @@ export function createAudio(opts) {
     if (!ctx || !SAMPLES[name]) return false;
     const entry = loadSample(name);
     if (entry.state !== 'ready') return false;
-    const src = ctx.createBufferSource();
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), name) : ctx.createBufferSource());
     src.buffer = entry.buffer;
     src.connect(buses.effects);
     src.start();
@@ -116,7 +116,7 @@ export function createAudio(opts) {
   function blip(bus, freq, dur, type, gain, when, slide) {
     if (!ensureCtx()) return;
     const t = when || ctx.currentTime;
-    const o = ctx.createOscillator();
+    const o = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createOscillator(), bus) : ctx.createOscillator());
     const g = ctx.createGain();
     o.type = type || 'sine';
     o.frequency.setValueAtTime(freq, t);
@@ -135,7 +135,7 @@ export function createAudio(opts) {
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const data = buf.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = ctx.createBufferSource();
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), bus) : ctx.createBufferSource());
     src.buffer = buf;
     const f = ctx.createBiquadFilter();
     f.type = 'bandpass'; f.frequency.value = freq || 800; f.Q.value = q || 1.2;
@@ -230,12 +230,12 @@ export function createAudio(opts) {
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const data = buf.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource();
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), null) : ctx.createBufferSource());
     src.buffer = buf; src.loop = true;
     const f = ctx.createBiquadFilter();
     f.type = 'lowpass'; f.frequency.value = 240; f.Q.value = 0.6;
     const g = ctx.createGain(); g.gain.value = 0.35;
-    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.07;
+    const lfo = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createOscillator(), null) : ctx.createOscillator()); lfo.frequency.value = 0.07;
     const lfoG = ctx.createGain(); lfoG.gain.value = 90;
     lfo.connect(lfoG); lfoG.connect(f.frequency);
     src.connect(f); f.connect(g); g.connect(buses.ambience);
@@ -246,7 +246,7 @@ export function createAudio(opts) {
     const mine = ambienceNodes;
     fetchBuffer('ambience').then((buf) => {
       if (ambienceNodes !== mine || !ctx) return;
-      const loop = ctx.createBufferSource();
+      const loop = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), null) : ctx.createBufferSource());
       loop.buffer = buf; loop.loop = true;
       const lg = ctx.createGain();
       const t = ctx.currentTime;

@@ -624,8 +624,8 @@ export function createRenderer(canvas, opts) {
     const k = currentPostKey();
     if (k !== postKey) { postKey = k; buildPost(); }
     fitShadow();
-    if (composer) composer.render(dt);
-    else renderer.render(scene, camera);
+    if (composer) (globalThis.GameOptions ? globalThis.GameOptions.draw(composer.renderer, () => composer.render(dt)) : composer.render(dt));
+    else (globalThis.GameOptions ? globalThis.GameOptions.draw(renderer, () => renderer.render(scene, camera)) : renderer.render(scene, camera));
   }
 
   // Apply resolved graphics settings live (no reload).
