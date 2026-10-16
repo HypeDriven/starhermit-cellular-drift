@@ -12,8 +12,21 @@ import { CATEGORIES, PRESETS, SHADOW_MAP, presetTier, withPreset } from './gfx.j
 import { gfxStrings } from './gfx-i18n.js';
 import { platformStrings, fmtPlatform } from './platform-strings.js';
 
-const T = gfxStrings(); // Graphics panel strings, locale from navigator.language
-const PT = platformStrings(typeof navigator !== 'undefined' ? navigator.language : 'en-US'); // StarHermit UI strings
+// One game language (js/i18n.js → sh-language.js). tr() translates English
+// keys; the Graphics (T) and StarHermit (PT) string sets follow the same locale.
+const I18N = window.CDI18N;
+const tr = (key, vars) => (I18N ? I18N.T(key, vars) : key);
+/** Marks an English key that is translated with tr() when shown. */
+const N = (s) => s;
+const curLang = () => (I18N ? I18N.lang : (typeof navigator !== 'undefined' ? navigator.language : 'en-US'));
+let T = gfxStrings(curLang()); // Graphics panel strings
+let PT = platformStrings(curLang()); // StarHermit UI strings
+// Live text: el() children of the form { __text: fn } become text nodes that
+// are rewritten in place when the language changes (see onLanguage).
+const liveText = [];
+const L = (key, vars) => ({ __text: () => tr(key, typeof vars === 'function' ? vars() : vars) });
+const GL = (key) => ({ __text: () => T(key) });
+const PL = (key) => ({ __text: () => PT[key] });
 
 // Preferences mirrored to the StarHermit settings KV.
 const SYNCED_SETTINGS = ['music', 'effects', 'ambience', 'voice', 'muted', 'captions', 'graphics', 'theme', 'reducedMotion', 'highContrast', 'cvdPalette', 'largeText'];
@@ -34,7 +47,11 @@ function el(tag, attrs, children) {
   if (children) for (const c of children) {
     if (c == null) continue;
     if (typeof c === 'string') e.appendChild(document.createTextNode(c));
-    else e.appendChild(c);
+    else if (c.__text) {
+      const n = document.createTextNode(c.__text());
+      liveText.push({ n, fn: c.__text });
+      e.appendChild(n);
+    } else e.appendChild(c);
   }
   return e;
 }
@@ -73,9 +90,10 @@ async function boot() {
     renderer = createRenderer(canvas, {});
   } catch (e) {
     wrap.appendChild(el('section', { class: 'cd-screen cd-compat' }, [
-      el('h2', {}, ['3D unavailable']),
-      el('p', {}, ['Cellular Drift needs WebGL to render the dish. Your progress and settings are preserved; try a browser with WebGL enabled.'])
+      el('h2', {}, [L('3D unavailable')]),
+      el('p', {}, [L('Cellular Drift needs WebGL to render the dish. Your progress and settings are preserved; try a browser with WebGL enabled.')])
     ]));
+    document.addEventListener('cd-language', onLanguage);
     document.body.setAttribute('data-cd-booted', '1'); // a visible explanation is a completed boot
     return;
   }
@@ -104,9 +122,12 @@ async function boot() {
   }
   await platform.loadBindings();
   platform.onAuth((a) => {
-    if (!a.signedIn) toast(PT.signedOut);
+    if (!a.signedIn) toast(PL('signedOut'));
     renderAccountLine();
   });
+  // Another device saved first: merge both sides and save again.
+  platform.onConflict((remoteRaw) => mergeCloud(remoteRaw));
+  document.addEventListener('cd-language', onLanguage);
   if (audio) {
     const st = settings();
     audio.setVolumes({ music: st.music, effects: st.effects, ambience: st.ambience, voice: st.voice });
@@ -168,6 +189,7 @@ function mirrorSettings() {
   }, 800);
 }
 
+/** msg: a string or live text ({ __text }) so a visible toast follows a language change. */
 function toast(msg) {
   const host = document.querySelector('.cd-root') || document.body;
   const t = el('div', { class: 'cd-toast', role: 'status' }, [msg]);
@@ -199,96 +221,96 @@ function buildUI(root) {
   // ---- title / home ----
   const titleScreen = el('section', { class: 'cd-screen cd-title' }, [
     el('h1', { class: 'cd-game-title' }, ['Cellular Drift']),
-    el('p', { class: 'cd-tagline' }, ['A realtime mass arena. Move, absorb, split, eject — and manage the threats that hunt you.']),
+    el('p', { class: 'cd-tagline' }, [L('A realtime mass arena. Move, absorb, split, eject — and manage the threats that hunt you.')]),
     el('p', { id: 'cd-account', class: 'cd-sub' }, [''])
   ]);
-  const playBtn = el('button', { class: 'cd-btn cd-play' }, ['Play']);
+  const playBtn = el('button', { class: 'cd-btn cd-play' }, [L('Play')]);
   playBtn.addEventListener('click', () => { audio.play('ui'); showModeSelect(); });
   titleScreen.appendChild(playBtn);
-  const helpBtn = el('button', { class: 'cd-btn' }, ['Help & rules']);
+  const helpBtn = el('button', { class: 'cd-btn' }, [L('Help & rules')]);
   helpBtn.addEventListener('click', () => { audio.play('ui'); showScreen('help'); });
   titleScreen.appendChild(helpBtn);
-  const gfxBtn = el('button', { class: 'cd-btn', id: 'cd-open-graphics' }, [T('graphics')]);
+  const gfxBtn = el('button', { class: 'cd-btn', id: 'cd-open-graphics' }, [GL('graphics')]);
   gfxBtn.addEventListener('click', () => { audio.play('ui'); showGraphics('title'); });
   titleScreen.appendChild(gfxBtn);
-  const inviteBtn = el('button', { class: 'cd-btn', id: 'cd-invite', hidden: '' }, [PT.invite]);
+  const inviteBtn = el('button', { class: 'cd-btn', id: 'cd-invite', hidden: '' }, [PL('invite')]);
   inviteBtn.addEventListener('click', async () => {
     audio.play('ui');
     const ok = await platform.copyInvite();
-    toast(ok ? PT.inviteCopied : PT.inviteFailed);
+    toast(PL(ok ? 'inviteCopied' : 'inviteFailed'));
   });
   titleScreen.appendChild(inviteBtn);
-  const signInBtn = el('button', { class: 'cd-btn', id: 'cd-signin', hidden: '' }, [PT.signIn]);
+  const signInBtn = el('button', { class: 'cd-btn', id: 'cd-signin', hidden: '' }, [PL('signIn')]);
   signInBtn.addEventListener('click', () => { audio.play('ui'); platform.signIn(); });
   titleScreen.appendChild(signInBtn);
 
   // ---- mode select (learn / journey / daily / practice / challenge) ----
   const modeSel = el('section', { class: 'cd-screen cd-modesel' }, [
-    el('h2', {}, ['Choose a mode'])
+    el('h2', {}, [L('Choose a mode')])
   ]);
   function modeRow(label, sub, fn) {
-    const b = el('button', { class: 'cd-btn cd-modebtn' }, [label]);
+    const b = el('button', { class: 'cd-btn cd-modebtn' }, [L(label)]);
     if (sub) b.appendChild(el('span', { class: 'cd-sub' }, [sub]));
     b.addEventListener('click', () => { audio.play('ui'); fn(); });
     modeSel.appendChild(b);
   }
-  modeRow('Learn', null, () => showLessons());
-  modeRow('Journey', null, () => showJourney());
-  modeRow('Daily Challenge', null, () => showDailySetup());
-  modeRow('Practice', null, () => showPracticeSelect());
-  modeRow('Challenge', null, () => showChallenges());
-  modeSel.appendChild(backButton('Back', showTitle));
+  modeRow(N('Learn'), null, () => showLessons());
+  modeRow(N('Journey'), null, () => showJourney());
+  modeRow(N('Daily Challenge'), null, () => showDailySetup());
+  modeRow(N('Practice'), null, () => showPracticeSelect());
+  modeRow(N('Challenge'), null, () => showChallenges());
+  modeSel.appendChild(backButton(N('Back'), showTitle));
 
   // ---- learn lessons list ----
-  const lessonList = el('section', { class: 'cd-screen cd-lessonlist' }, [el('h2', {}, ['Lessons'])]);
+  const lessonList = el('section', { class: 'cd-screen cd-lessonlist' }, [el('h2', {}, [L('Lessons')])]);
   C.LESSONS.forEach((l) => {
-    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': l.id }, [l.name]);
-    if (l.brief) b.appendChild(el('span', { class: 'cd-sub' }, [l.brief]));
+    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': l.id }, [L(l.name)]);
+    if (l.brief) b.appendChild(el('span', { class: 'cd-sub' }, [L(l.brief)]));
     b.addEventListener('click', () => { audio.play('ui'); startRound(l, 'learn'); });
     lessonList.appendChild(b);
   });
-  lessonList.appendChild(backButton('Back', showModeSelect));
+  lessonList.appendChild(backButton(N('Back'), showModeSelect));
 
   // ---- journey stages list ----
-  const journeyList = el('section', { class: 'cd-screen cd-journeylist' }, [el('h2', {}, ['Journey'])]);
+  const journeyList = el('section', { class: 'cd-screen cd-journeylist' }, [el('h2', {}, [L('Journey')])]);
   C.journeyStages().forEach((st) => {
-    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': st.id }, [st.name]);
-    if (st.mastery) b.appendChild(el('span', { class: 'cd-sub' }, ['mastery stage']));
+    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': st.id }, [L(st.name)]);
+    if (st.mastery) b.appendChild(el('span', { class: 'cd-sub' }, [L('mastery stage')]));
     b.addEventListener('click', () => { audio.play('ui'); startRound(st, 'journey'); });
     journeyList.appendChild(b);
   });
-  journeyList.appendChild(backButton('Back', showModeSelect));
+  journeyList.appendChild(backButton(N('Back'), showModeSelect));
 
   // ---- daily setup ----
   const daily = C.dailyFor(platform.now());
   const dailySetup = el('section', { class: 'cd-screen cd-dailysetup' }, [
-    el('h2', {}, ['Daily Challenge']),
-    el('p', { class: 'cd-sub' }, [daily.name + ' — reach ' + daily.goal.mass + ' mass in 3 minutes. Ranked.'])
+    el('h2', {}, [L('Daily Challenge')]),
+    el('p', { class: 'cd-sub' }, [L('{name} — reach {mass} mass in 3 minutes. Ranked.', () => ({ name: contentName(daily), mass: daily.goal.mass }))])
   ]);
-  const dStartBtn = el('button', { class: 'cd-btn cd-itembtn' }, ['Begin the day']);
+  const dStartBtn = el('button', { class: 'cd-btn cd-itembtn' }, [L('Begin the day')]);
   dStartBtn.addEventListener('click', () => { audio.play('ui'); startRound(C.dailyFor(platform.now()), 'daily'); });
   dailySetup.appendChild(dStartBtn);
-  dailySetup.appendChild(backButton('Back', showModeSelect));
+  dailySetup.appendChild(backButton(N('Back'), showModeSelect));
 
   // ---- practice preset select ----
-  const pracSel = el('section', { class: 'cd-screen cd-pracsel' }, [el('h2', {}, ['Practice'])]);
+  const pracSel = el('section', { class: 'cd-screen cd-pracsel' }, [el('h2', {}, [L('Practice')])]);
   C.PRACTICE.forEach((p) => {
-    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': p.id }, [p.name]);
-    if (p.description) b.appendChild(el('span', { class: 'cd-sub' }, [p.description]));
+    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': p.id }, [L(p.name)]);
+    if (p.description) b.appendChild(el('span', { class: 'cd-sub' }, [L(p.description)]));
     b.addEventListener('click', () => { audio.play('ui'); startRound(p, 'practice'); });
     pracSel.appendChild(b);
   });
-  pracSel.appendChild(backButton('Back', showModeSelect));
+  pracSel.appendChild(backButton(N('Back'), showModeSelect));
 
   // ---- challenges list ----
-  const chalList = el('section', { class: 'cd-screen cd-challist' }, [el('h2', {}, ['Challenges'])]);
+  const chalList = el('section', { class: 'cd-screen cd-challist' }, [el('h2', {}, [L('Challenges')])]);
   C.CHALLENGES.forEach((ch) => {
-    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': ch.id }, [ch.name]);
-    if (ch.description) b.appendChild(el('span', { class: 'cd-sub' }, [ch.description]));
+    const b = el('button', { class: 'cd-btn cd-itembtn', 'data-cid': ch.id }, [L(ch.name)]);
+    if (ch.description) b.appendChild(el('span', { class: 'cd-sub' }, [L(ch.description)]));
     b.addEventListener('click', () => { audio.play('ui'); startRound(ch, 'challenge'); });
     chalList.appendChild(b);
   });
-  chalList.appendChild(backButton('Back', showModeSelect));
+  chalList.appendChild(backButton(N('Back'), showModeSelect));
 
   // ---- play HUD ----
   const hud = el('section', { class: 'cd-screen cd-hud' }, [
@@ -297,17 +319,17 @@ function buildUI(root) {
       el('div', { class: 'cd-progress' }, [''])
     ]),
     (() => {
-      const b = el('button', { class: 'cd-btn cd-pausebtn' }, ['Pause']);
+      const b = el('button', { class: 'cd-btn cd-pausebtn' }, [L('Pause')]);
       b.addEventListener('click', () => pauseGame());
       return b;
     })(),
     (() => {
       const tray = el('div', { class: 'cd-actions' });
-      const splitBtn = el('button', { class: 'cd-btn cd-actbtn' }, ['Split']);
+      const splitBtn = el('button', { class: 'cd-btn cd-actbtn' }, [L('Split')]);
       splitBtn.addEventListener('click', () => doAction('split'));
-      const ejectBtn = el('button', { class: 'cd-btn cd-actbtn' }, ['Eject']);
+      const ejectBtn = el('button', { class: 'cd-btn cd-actbtn' }, [L('Eject')]);
       ejectBtn.addEventListener('click', () => doAction('eject'));
-      const hintBtn = el('button', { class: 'cd-btn cd-actbtn' }, ['Hint']);
+      const hintBtn = el('button', { class: 'cd-btn cd-actbtn' }, [L('Hint')]);
       hintBtn.addEventListener('click', () => showHint());
       tray.appendChild(splitBtn); tray.appendChild(ejectBtn); tray.appendChild(hintBtn);
       ui.splitBtn = splitBtn; ui.ejectBtn = ejectBtn;
@@ -317,45 +339,45 @@ function buildUI(root) {
   ]);
 
   // ---- pause / settings overlay ----
-  const pause = el('section', { class: 'cd-screen cd-pause' }, [el('h2', {}, ['Paused'])]);
-  const resumeBtn = el('button', { class: 'cd-btn cd-itembtn' }, ['Resume']);
+  const pause = el('section', { class: 'cd-screen cd-pause' }, [el('h2', {}, [L('Paused')])]);
+  const resumeBtn = el('button', { class: 'cd-btn cd-itembtn' }, [L('Resume')]);
   resumeBtn.addEventListener('click', () => resumeGame());
   pause.appendChild(resumeBtn);
-  const restartBtn = el('button', { class: 'cd-btn cd-itembtn' }, ['Restart round']);
+  const restartBtn = el('button', { class: 'cd-btn cd-itembtn' }, [L('Restart round')]);
   restartBtn.addEventListener('click', () => { paused = false; startRound(currentContent, currentMode); });
   pause.appendChild(restartBtn);
-  const leaveBtn = el('button', { class: 'cd-btn cd-itembtn' }, ['Leave to modes']);
+  const leaveBtn = el('button', { class: 'cd-btn cd-itembtn' }, [L('Leave to modes')]);
   leaveBtn.addEventListener('click', () => { endSession(); showModeSelect(); });
   pause.appendChild(leaveBtn);
-  const pauseGfxBtn = el('button', { class: 'cd-btn cd-itembtn', id: 'cd-pause-graphics' }, [T('graphics')]);
+  const pauseGfxBtn = el('button', { class: 'cd-btn cd-itembtn', id: 'cd-pause-graphics' }, [GL('graphics')]);
   pauseGfxBtn.addEventListener('click', () => { audio.play('ui'); showGraphics('pause'); });
   pause.appendChild(pauseGfxBtn);
   function settingRow(label, key) {
     const row = el('div', { class: 'cd-setrow' });
-    row.appendChild(el('span', {}, [label]));
+    row.appendChild(el('span', {}, [L(label)]));
     const inp = el('input', { type: 'range', min: '0', max: '1', step: '0.05', value: String(S.load().settings[key] != null ? S.load().settings[key] : 0) });
     row.appendChild(inp);
     pause.appendChild(row);
     return inp;
   }
-  const musicVol = settingRow('Music volume', 'music');
-  const fxVol = settingRow('Effects volume', 'effects');
-  const ambVol = settingRow('Ambience volume', 'ambience');
-  const voiceVol = settingRow('Voice volume', 'voice');
+  const musicVol = settingRow(N('Music volume'), 'music');
+  const fxVol = settingRow(N('Effects volume'), 'effects');
+  const ambVol = settingRow(N('Ambience volume'), 'ambience');
+  const voiceVol = settingRow(N('Voice volume'), 'voice');
   function toggleRow(label, key) {
     const row = el('div', { class: 'cd-setrow' });
-    row.appendChild(el('span', {}, [label]));
+    row.appendChild(el('span', {}, [L(label)]));
     const inp = el('input', { type: 'checkbox' });
     inp.checked = !!S.load().settings[key]; // property, not attribute: setAttribute('checked','false') still checks the box
     row.appendChild(inp);
     pause.appendChild(row);
     return inp;
   }
-  const mutedChk = toggleRow('Mute all audio', 'muted');
-  const captionsChk = toggleRow('Captions / text cues', 'captions');
-  const motionChk = toggleRow('Reduced motion', 'reducedMotion');
-  const contrastChk = toggleRow('High contrast', 'highContrast');
-  const cvdChk = toggleRow('Color-vision-safe palette', 'cvdPalette');
+  const mutedChk = toggleRow(N('Mute all audio'), 'muted');
+  const captionsChk = toggleRow(N('Captions / text cues'), 'captions');
+  const motionChk = toggleRow(N('Reduced motion'), 'reducedMotion');
+  const contrastChk = toggleRow(N('High contrast'), 'highContrast');
+  const cvdChk = toggleRow(N('Color-vision-safe palette'), 'cvdPalette');
   function onVolChange() {
     S.save(Object.assign(S.load(), { settings: Object.assign({}, S.load().settings, { music: +musicVol.value, effects: +fxVol.value, ambience: +ambVol.value, voice: +voiceVol.value }) }));
     if (audio) audio.setVolumes({ music: +musicVol.value, effects: +fxVol.value, ambience: +ambVol.value, voice: +voiceVol.value });
@@ -383,18 +405,18 @@ function buildUI(root) {
   const graphics = buildGraphicsPanel();
 
   // ---- results overlay (populated per round in showResults) ----
-  const result = el('section', { class: 'cd-screen cd-result', 'aria-live': 'polite' }, [el('h2', {}, ['Results'])]);
+  const result = el('section', { class: 'cd-screen cd-result', 'aria-live': 'polite' }, [el('h2', {}, [L('Results')])]);
 
   // ---- help overlay ----
   const help = el('section', { class: 'cd-screen cd-help' }, [
-    el('h2', {}, ['Help & rules']),
+    el('h2', {}, [L('Help & rules')]),
     el('div', { class: 'cd-helptext' }, [
-      el('p', {}, ['Steer your cell with the pointer (or ' + ['up', 'left', 'down', 'right'].map((a) => platform.keyLabel(a)).join(', ') + '). Absorb nutrient motes, pellets, and cells at least 15% smaller than you to grow.']),
-      el('p', {}, ['Split (' + platform.keyLabel('split') + ') launches half your mass forward to attack or travel. Eject (' + platform.keyLabel('eject') + ') sheds pellets to feed allies or lighten up. Hint: ' + platform.keyLabel('hint') + '. Pause: ' + platform.keyLabel('pause') + '. Spiked barbs burst cells of 60+ mass — small cells slip by.']),
-      el('p', {}, ['Pause with Esc or the Pause button. Rank is by mass and survival; ties break on objective completion, fewer invalid actions, then faster time.'])
+      el('p', {}, [L('Steer your cell with the pointer (or {keys}). Absorb nutrient motes, pellets, and cells at least 15% smaller than you to grow.', () => ({ keys: ['up', 'left', 'down', 'right'].map((a) => platform.keyLabel(a)).join(', ') }))]),
+      el('p', {}, [L('Split ({split}) launches half your mass forward to attack or travel. Eject ({eject}) sheds pellets to feed allies or lighten up. Hint: {hint}. Pause: {pause}. Spiked barbs burst cells of 60+ mass — small cells slip by.', () => ({ split: platform.keyLabel('split'), eject: platform.keyLabel('eject'), hint: platform.keyLabel('hint'), pause: platform.keyLabel('pause') }))]),
+      el('p', {}, [L('Pause with Esc or the Pause button. Rank is by mass and survival; ties break on objective completion, fewer invalid actions, then faster time.')])
     ]),
     (() => {
-      const b = el('button', { class: 'cd-btn cd-itembtn' }, ['Close']);
+      const b = el('button', { class: 'cd-btn cd-itembtn' }, [L('Close')]);
       b.addEventListener('click', () => showTitle());
       return b;
     })()
@@ -447,13 +469,13 @@ function presetLabel(p) { return T(p); }
 
 function buildGraphicsPanel() {
   const panel = el('section', { class: 'cd-screen cd-graphics', 'aria-labelledby': 'gfx-heading' }, [
-    el('h2', { id: 'gfx-heading' }, [T('settingsTitle')])
+    el('h2', { id: 'gfx-heading' }, [GL('settingsTitle')])
   ]);
   const body = el('div', { class: 'cd-gfxbody' });
   panel.appendChild(body);
   function row(labelText, control, id) {
     const r = el('div', { class: 'cd-setrow cd-gfxrow' });
-    r.appendChild(el('label', { for: id }, [labelText]));
+    r.appendChild(el('label', { for: id }, [GL(labelText)]));
     r.appendChild(control);
     body.appendChild(r);
     return r;
@@ -461,9 +483,9 @@ function buildGraphicsPanel() {
   // quality preset
   const presetSel = el('select', { id: 'gfx-preset', 'data-gfx': 'preset' });
   presetSel.appendChild(el('option', { value: 'auto' }, ['']));
-  for (const p of PRESETS) presetSel.appendChild(el('option', { value: p }, [presetLabel(p)]));
+  for (const p of PRESETS) presetSel.appendChild(el('option', { value: p }, [GL(p)]));
   presetSel.addEventListener('change', () => saveGraphics(withPreset(gfxSettings(), presetSel.value)));
-  row(T('quality'), presetSel, 'gfx-preset');
+  row('quality', presetSel, 'gfx-preset');
   // render scale 50–200 %
   const scaleWrap = el('span', { class: 'cd-gfxscale' });
   const scale = el('input', { type: 'range', id: 'gfx-scale', 'data-gfx': 'render_scale', min: '50', max: '200', step: '5', value: '100' });
@@ -475,20 +497,20 @@ function buildGraphicsPanel() {
     g.render_scale = Math.round(+scale.value) / 100;
     saveGraphics(g);
   });
-  row(T('renderScale'), scaleWrap, 'gfx-scale');
+  row('renderScale', scaleWrap, 'gfx-scale');
   // one select per category
   const catSels = {};
   for (const cat of Object.keys(CATEGORIES)) {
     const sel = el('select', { id: 'gfx-' + cat, 'data-gfx-cat': cat });
     sel.appendChild(el('option', { value: 'preset' }, ['']));
-    for (const tier of CATEGORIES[cat]) sel.appendChild(el('option', { value: tier }, [tierLabel(tier)]));
+    for (const tier of CATEGORIES[cat]) sel.appendChild(el('option', { value: tier }, [GL('t_' + tier)]));
     sel.addEventListener('change', () => {
       const g = gfxSettings();
       if (sel.value === 'preset') delete g[cat]; else g[cat] = sel.value;
       saveGraphics(g);
     });
     catSels[cat] = sel;
-    row(T('cat_' + cat), sel, sel.id);
+    row('cat_' + cat, sel, sel.id);
   }
   // toggles
   function toggle(key, label, id, defaultOn) {
@@ -501,14 +523,14 @@ function buildGraphicsPanel() {
     row(label, inp, id);
     return inp;
   }
-  const adaptive = toggle('adaptive', T('adaptive'), 'gfx-adaptive', true);
-  const showFps = toggle('show_fps', T('showFps'), 'gfx-fps', false);
+  const adaptive = toggle('adaptive', 'adaptive', 'gfx-adaptive', true);
+  const showFps = toggle('show_fps', 'showFps', 'gfx-fps', false);
   const summary = el('p', { class: 'cd-sub cd-gfxsummary', id: 'gfx-summary', 'aria-live': 'polite' }, ['']);
-  const note = el('p', { class: 'cd-gfxnote', id: 'gfx-note', role: 'status' }, [T('postFailed')]);
+  const note = el('p', { class: 'cd-gfxnote', id: 'gfx-note', role: 'status' }, [GL('postFailed')]);
   note.hidden = true;
   body.appendChild(summary);
   body.appendChild(note);
-  const back = el('button', { class: 'cd-btn cd-backbtn cd-itembtn', id: 'gfx-back' }, [T('back')]);
+  const back = el('button', { class: 'cd-btn cd-backbtn cd-itembtn', id: 'gfx-back' }, [GL('back')]);
   back.addEventListener('click', () => { audio.play('ui'); closeGraphics(); });
   panel.appendChild(back);
   ui.gfx = { presetSel, scale, scaleOut, catSels, adaptive, showFps, summary, note };
@@ -571,17 +593,17 @@ function refreshProgressMarks() {
       badge.textContent = text;
     }
   };
-  mark(ui.lessonList, (id) => prog.lessonsDone[id] ? 'done' : '');
+  mark(ui.lessonList, (id) => prog.lessonsDone[id] ? tr('done') : '');
   mark(ui.journeyList, (id) => {
     const stars = prog.journeyStars[id];
-    return stars ? 'done' + (stars > 1 ? ' ★'.repeat(Math.min(3, stars)) : '') : '';
+    return stars ? tr('done') + (stars > 1 ? ' ★'.repeat(Math.min(3, stars)) : '') : '';
   });
-  mark(ui.pracSel, (id) => prog.practiceDone && prog.practiceDone[id] ? 'done' : '');
-  mark(ui.chalList, (id) => prog.challengeDone && prog.challengeDone[id] ? 'done' : '');
+  mark(ui.pracSel, (id) => prog.practiceDone && prog.practiceDone[id] ? tr('done') : '');
+  mark(ui.chalList, (id) => prog.challengeDone && prog.challengeDone[id] ? tr('done') : '');
 }
 
 function backButton(label, fn) {
-  const b = el('button', { class: 'cd-btn cd-backbtn' }, [label]);
+  const b = el('button', { class: 'cd-btn cd-backbtn' }, [L(label)]);
   b.addEventListener('click', () => { audio.play('ui'); fn(); });
   return b;
 }
@@ -620,14 +642,14 @@ function renderAccountLine() {
   if (inv) inv.hidden = !platform.hosted;
   if (sib) sib.hidden = !platform.canSignIn();
   if (!platform.hosted) {
-    node.textContent = 'Offline — progress saves on this device.';
+    node.textContent = tr('Offline — progress saves on this device.');
     return;
   }
   const name = platform.profile ? platform.profile.name : '…';
-  const syncTxt = platform.sync === 'synced' ? 'progress synced'
-    : platform.sync === 'saving' ? 'saving…'
-    : 'cloud sync unavailable';
-  node.textContent = 'Playing as ' + name + ' · ' + syncTxt;
+  const syncTxt = platform.sync === 'synced' ? tr('progress synced')
+    : platform.sync === 'saving' ? tr('saving…')
+    : tr('cloud sync unavailable');
+  node.textContent = tr('Playing as {name}', { name }) + ' · ' + syncTxt;
 }
 function showModeSelect() { showScreen('modesel'); }
 function showLessons() { showScreen('lessons'); }
@@ -698,7 +720,7 @@ function doAction(type) {
   const res = R.applyCommand(game, 'p0', { type: type, id: 'c' + (++cmdSeq) });
   if (!res.ok && res.reason !== 'duplicate') {
     // invalid-action explanation, visible and sonic
-    ui.captions.textContent = 'Cannot ' + type + ': ' + res.reason.replace(/-/g, ' ');
+    ui.captions.textContent = tr(type === 'split' ? N('Cannot split: {reason}') : N('Cannot eject: {reason}'), { reason: tr(REASONS[res.reason] || res.reason.replace(/-/g, ' ')) });
     clearTimeout(ui._capT);
     ui._capT = setTimeout(() => { ui.captions.textContent = ''; }, 1600);
   }
@@ -708,7 +730,7 @@ function showHint() {
   if (!game || game.phase !== 'active') return;
   const h = R.hint(game, 'p0');
   audio.play('hint');
-  ui.captions.textContent = h.text;
+  ui.captions.textContent = tr(h.text);
   clearTimeout(ui._capT);
   ui._capT = setTimeout(() => { ui.captions.textContent = ''; }, 2600);
   if (h.x != null) {
@@ -862,13 +884,13 @@ function fmtTime(ticks) {
 
 function objectiveText() {
   const g = game.config.goal;
-  const brief = currentContent && currentContent.brief ? currentContent.brief + ' ' : '';
-  if (g.type === 'reach-mass') return brief + 'Reach ' + g.mass + ' mass. Absorb motes, pellets and smaller cells to grow.';
-  if (g.type === 'absorb-cells') return brief + 'Absorb ' + g.count + ' rival cells.';
-  if (g.type === 'eject-count') return brief + 'Eject ' + g.count + ' pellets.';
-  if (g.type === 'split-then-mass') return brief + 'Split at least ' + (g.splits || 1) + ' time(s), then reach ' + g.mass + ' mass.';
-  if (g.type === 'reach-marker') return brief + 'Move to the glowing marker.';
-  return brief + 'Survive and grow.';
+  const brief = currentContent && currentContent.brief ? tr(currentContent.brief) + ' ' : '';
+  if (g.type === 'reach-mass') return brief + tr('Reach {mass} mass. Absorb motes, pellets and smaller cells to grow.', { mass: g.mass });
+  if (g.type === 'absorb-cells') return brief + tr('Absorb {n} rival cells.', { n: g.count });
+  if (g.type === 'eject-count') return brief + tr('Eject {n} pellets.', { n: g.count });
+  if (g.type === 'split-then-mass') return brief + tr('Split at least {n} time(s), then reach {mass} mass.', { n: g.splits || 1, mass: g.mass });
+  if (g.type === 'reach-marker') return brief + tr('Move to the glowing marker.');
+  return brief + tr('Survive and grow.');
 }
 
 let lastObjText = '', lastProgText = '';
@@ -881,12 +903,12 @@ function updateHUD() {
   const rows = R.rankings(game);
   let rank = 1;
   for (const row of rows) if (row.playerId === 'p0') rank = row.rank;
-  let prog = 'Mass ' + mass;
+  let prog = tr('Mass {n}', { n: mass });
   const goal = game.config.goal;
   if (goal.type === 'reach-mass' || goal.type === 'split-then-mass') prog += ' / ' + goal.mass;
   if (game.config.durationTicks > 0) prog += ' · ' + fmtTime(game.config.durationTicks - game.tick);
-  prog += ' · Rank ' + rank + '/' + game.players.length;
-  if (game.phase === 'terminal') prog = 'Round over.';
+  prog += ' · ' + tr('Rank {rank}/{total}', { rank, total: game.players.length });
+  if (game.phase === 'terminal') prog = tr('Round over.');
   if (prog !== lastProgText) { ui.progress.textContent = prog; lastProgText = prog; }
 
   const legal = R.legalActions(game, 'p0');
@@ -902,13 +924,13 @@ function showResults() {
   const durationMs = nowMs() - roundStartedAtMs;
   const reason = g.terminalReason;
 
-  let headline = 'Round over';
-  if (reason === 'goal-complete') headline = 'Goal complete!';
-  else if (reason === 'last-cell') headline = 'Last cell drifting — you win!';
-  else if (reason === 'time-up') headline = bd.objectiveMet ? 'Time up — goal held!' : 'Time up';
-  else if (reason === 'eliminated') headline = 'You were absorbed';
-  else if (reason === 'constraint-violated') headline = 'Constraint broken — no rival absorbs allowed';
-  else if (reason === 'surrender') headline = 'Surrendered';
+  let headline = N('Round over');
+  if (reason === 'goal-complete') headline = N('Goal complete!');
+  else if (reason === 'last-cell') headline = N('Last cell drifting — you win!');
+  else if (reason === 'time-up') headline = bd.objectiveMet ? N('Time up — goal held!') : N('Time up');
+  else if (reason === 'eliminated') headline = N('You were absorbed');
+  else if (reason === 'constraint-violated') headline = N('Constraint broken — no rival absorbs allowed');
+  else if (reason === 'surrender') headline = N('Surrendered');
 
   if (reason === 'goal-complete' || reason === 'last-cell') audio.play('win');
   else if (reason === 'time-up') audio.play('timeup');
@@ -957,12 +979,12 @@ function showResults() {
 
   // Achievements (idempotent, local — part of the cloud-saved doc).
   const ACH_DEFS = [
-    ['first-round', () => lt.rounds >= 1, 'First drift'],
-    ['first-goal', () => lt.goals >= 1, 'Objective met'],
-    ['first-win', () => lt.wins >= 1, 'Arena champion'],
-    ['rounds-25', () => lt.rounds >= 25, 'Persistent cell'],
-    ['cells-250', () => lt.cellsAbsorbed >= 250, 'Absorber'],
-    ['splits-100', () => lt.splits >= 100, 'Divider']
+    ['first-round', () => lt.rounds >= 1, N('First drift')],
+    ['first-goal', () => lt.goals >= 1, N('Objective met')],
+    ['first-win', () => lt.wins >= 1, N('Arena champion')],
+    ['rounds-25', () => lt.rounds >= 25, N('Persistent cell')],
+    ['cells-250', () => lt.cellsAbsorbed >= 250, N('Absorber')],
+    ['splits-100', () => lt.splits >= 100, N('Divider')]
   ];
   const earned = [];
   for (const [key, test, label] of ACH_DEFS) {
@@ -987,38 +1009,87 @@ function showResults() {
   const ranked = platform.hosted && currentMode !== 'learn';
   const submitted = ranked ? platform.submitScore(bd.total) : null;
 
-  // build the results panel
+  // build the results panel (every string is live text, so a language change
+  // re-renders it in place); the leaderboard line follows the post's outcome
+  const lb = { state: submitted ? 'lbPosting' : null, rank: null };
   const r = ui.result;
   while (r.firstChild) r.removeChild(r.firstChild);
   r.appendChild(el('img', { class: 'cd-resultart', src: './assets/results-vignette.webp', alt: '', 'aria-hidden': 'true', width: '768', height: '432' }));
-  r.appendChild(el('h2', {}, [headline]));
+  r.appendChild(el('h2', {}, [L(headline)]));
   const list = el('dl', { class: 'cd-breakdown' });
-  const labels = { motes: 'Motes absorbed', pellets: 'Pellets absorbed', rivalMass: 'Rival mass', survival: 'Survival', peakMass: 'Peak mass', rankBonus: 'Rank bonus', objectiveBonus: 'Objective bonus' };
+  const labels = { motes: N('Motes absorbed'), pellets: N('Pellets absorbed'), rivalMass: N('Rival mass'), survival: N('Survival'), peakMass: N('Peak mass'), rankBonus: N('Rank bonus'), objectiveBonus: N('Objective bonus') };
   for (const k in labels) {
-    list.appendChild(el('dt', {}, [labels[k]]));
+    list.appendChild(el('dt', {}, [L(labels[k])]));
     list.appendChild(el('dd', {}, [String(bd.parts[k] || 0)]));
   }
   r.appendChild(list);
-  r.appendChild(el('p', { class: 'cd-total' }, ['Total score: ' + bd.total + ' · Rank ' + bd.rank + '/' + g.players.length + (bd.objectiveMet ? ' · objective met' : '')]));
+  r.appendChild(el('p', { class: 'cd-total' }, [{ __text: () => tr('Total score: {total} · Rank {rank}/{players}', { total: bd.total, rank: bd.rank, players: g.players.length }) + (bd.objectiveMet ? ' · ' + tr('objective met') : '') }]));
   if (earned.length) {
-    r.appendChild(el('p', { class: 'cd-sub' }, ['🏅 Achievement unlocked: ' + earned.join(', ')]));
+    r.appendChild(el('p', { class: 'cd-sub' }, [{ __text: () => '🏅 ' + tr('Achievement unlocked: {list}', { list: earned.map((k) => tr(k)).join(', ') }) }]));
   }
   // Leaderboard line (signed in only): posting → rank / posted / not posted.
   if (submitted) {
-    const lbLine = el('p', { class: 'cd-sub', id: 'cd-results-lb', 'aria-live': 'polite' }, [PT.lbPosting]);
+    const lbText = () => (lb.state === 'lbRank' ? fmtPlatform(PT.lbRank, { rank: lb.rank }) : PT[lb.state]);
+    const lbLine = el('p', { class: 'cd-sub', id: 'cd-results-lb', 'aria-live': 'polite' }, [{ __text: lbText }]);
     r.appendChild(lbLine);
     submitted.then((res) => {
-      lbLine.textContent = !res.posted ? PT.lbNotPosted
-        : res.rank ? fmtPlatform(PT.lbRank, { rank: res.rank }) : PT.lbPosted;
-    }, () => { lbLine.textContent = PT.lbNotPosted; });
+      lb.state = !res.posted ? 'lbNotPosted' : res.rank ? 'lbRank' : 'lbPosted';
+      lb.rank = res.rank;
+      lbLine.firstChild.nodeValue = lbText();
+    }, () => { lb.state = 'lbNotPosted'; lbLine.firstChild.nodeValue = lbText(); });
   }
-  const retry = el('button', { class: 'cd-btn cd-itembtn' }, ['Retry']);
+  const retry = el('button', { class: 'cd-btn cd-itembtn' }, [L('Retry')]);
   retry.addEventListener('click', () => { audio.play('ui'); startRound(currentContent, currentMode); });
   r.appendChild(retry);
-  const back = el('button', { class: 'cd-btn cd-itembtn' }, ['Back to modes']);
+  const back = el('button', { class: 'cd-btn cd-itembtn' }, [L('Back to modes')]);
   back.addEventListener('click', () => { audio.play('ui'); endSession(); showModeSelect(); });
   r.appendChild(back);
   showScreen('result');
+}
+
+// Plain-language reasons for refused actions (rules.js reason ids).
+const REASONS = {
+  'round-over': N('the round is over'), eliminated: N('you were absorbed'), 'split-disabled': N('splitting is off in this round'),
+  'cells-too-small-or-cooling': N('your cells are too small or still cooling down'), 'no-cells': N('you have no cells'),
+  'cell-limit': N('you already have the most cells allowed'), 'eject-disabled': N('ejecting is off in this round'),
+  cooling: N('still cooling down'), 'cells-too-small': N('your cells are too small'), 'unknown-command': N('that action is not available'),
+};
+
+/** Display name of a content entry (authored in English; dailies carry their date). */
+function contentName(c) {
+  if (c && c.day && /^daily-/.test(c.id || '')) return tr('Daily Culture — {date}', { date: c.day });
+  return tr((c && c.name) || '');
+}
+
+/**
+ * Language change: rewrite every live text node in place, then the strings
+ * rebuilt from state (account line, HUD, Graphics panel, progress marks).
+ * The round in play, the simulation and the scene are untouched.
+ */
+function onLanguage() {
+  T = gfxStrings(curLang());
+  PT = platformStrings(curLang());
+  for (let i = liveText.length - 1; i >= 0; i--) {
+    const { n, fn } = liveText[i];
+    if (!n.isConnected) { liveText.splice(i, 1); continue; }
+    n.nodeValue = fn();
+  }
+  renderAccountLine();
+  lastObjText = ''; lastProgText = '';
+  updateHUD();
+  refreshGraphicsPanel();
+  refreshProgressMarks();
+}
+
+/**
+ * Save conflict (another device wrote the cloud slot since our last load):
+ * keep the better of both progress records and this device's settings, then
+ * save the merge again (S.save mirrors it to the cloud).
+ */
+function mergeCloud(remoteRaw) {
+  const remote = remoteRaw ? S.loadRaw(remoteRaw) : null;
+  const doc = S.load();
+  S.save(remote ? S.mergeProgress(doc, remote) : doc);
 }
 
 // ---------- public entry point used by index.html module script ----------

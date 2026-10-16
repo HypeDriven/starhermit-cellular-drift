@@ -32,6 +32,7 @@ import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { stubStarHermit, launchToken } from './starhermit-e2e.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SHOT_DIR = path.join(ROOT, 'test-results', 'e2e');
@@ -186,7 +187,13 @@ async function runPass(browser, pass) {
   page.on('console', (m) => {
     if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) errors.push(`[${label}] console.${m.type()}: ${m.text()}`);
   });
-  page.on('requestfailed', (r) => errors.push(`[${label}] request failed: ${r.url()} ${r.failure() && r.failure().errorText}`));
+  // While the signed-in language step serves a stubbed StarHermit API, leaving the
+  // page cancels its in-flight save/flush calls (ERR_ABORTED) — not a game defect.
+  let apiStubbed = false;
+  page.on('requestfailed', (r) => {
+    if (apiStubbed && /\/api\/v1\//.test(r.url()) && /ERR_ABORTED/.test((r.failure() && r.failure().errorText) || '')) return;
+    errors.push(`[${label}] request failed: ${r.url()} ${r.failure() && r.failure().errorText}`);
+  });
   page.on('response', (r) => { if (r.status() >= 400) errors.push(`[${label}] HTTP ${r.status()} ${r.url()}`); });
 
   await step(`${label}: cold load -> title screen, watchdog cleared`, async () => {
@@ -426,6 +433,79 @@ async function runPass(browser, pass) {
       await startRoundVia(page, label, mode, item);
       await assertPlayerRendered(page, label, `${stage} HUD`);
       await page.screenshot({ path: SHOT(`hud-${stage}`, label) });
+    });
+  }
+
+  if (label === 'desktop' || label === 'phone-portrait') {
+    // Signed in against a stubbed StarHermit API whose account prefers fr-CA:
+    // Automatic resolves to Canadian French; switching to Italian from the
+    // Graphics settings while a round is paused re-renders every visible
+    // string, keeps the round and syncs ui.language; Report a problem posts.
+    await step(`${label}: Language: Automatic follows the StarHermit preference; live switch mid-round; ui.language; report a problem`, async () => {
+      const calls = await stubStarHermit(page, { preferredLanguage: 'fr-CA' });
+      apiStubbed = true;
+      await page.goto('about:blank');
+      await page.goto(`${base}index.html#game_token=${launchToken()}`, { waitUntil: 'load' });
+      await visibleScreen(page, '.cd-title');
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA' && document.querySelector('.cd-title .cd-play').textContent === 'Jouer');
+      await page.locator('.cd-title .cd-play').click();
+      await visibleScreen(page, '.cd-modesel');
+      await page.locator('.cd-modesel .cd-modebtn').filter({ hasText: /^Entraînement$/ }).click();
+      await visibleScreen(page, '.cd-pracsel');
+      await page.locator('.cd-pracsel .cd-itembtn').first().click();
+      await visibleScreen(page, '.cd-hud');
+      await page.waitForFunction(() => /^Masse \d+/.test(document.querySelector('.cd-hud .cd-progress').textContent));
+      await page.locator('.cd-hud .cd-pausebtn').click();
+      await visibleScreen(page, '.cd-pause');
+      if ((await page.locator('.cd-pause h2').textContent()) !== 'En pause') fail('pause heading not French');
+      const t0 = (await debug(page)).tick;
+      await page.locator('#cd-pause-graphics').click();
+      await visibleScreen(page, '.cd-graphics');
+      const choice = page.locator('[data-game-language="choice"]');
+      await choice.scrollIntoViewIfNeeded();
+      const auto = await choice.locator('option').first().textContent();
+      if (auto !== 'Automatique — Français (Canada)') fail('Automatic label not resolved: ' + auto);
+      if (await page.locator('[data-game-language="choice"]').count() !== 1) fail('expected exactly one language selector');
+      await choice.selectOption('it-IT');
+      await page.waitForFunction(() => document.documentElement.lang === 'it-IT' &&
+        document.getElementById('gfx-heading').textContent === 'Impostazioni grafiche' &&
+        document.getElementById('gfx-back').textContent === 'Indietro');
+      await page.waitForFunction(() => /Salvato/.test(document.querySelector('[data-game-language="status"]')?.textContent || ''));
+      if (calls.settings['ui.language']?.choice !== 'it-IT') fail('ui.language not saved: ' + JSON.stringify(calls.settings));
+      const report = page.locator('[data-game-report="title"]');
+      await report.scrollIntoViewIfNeeded();
+      await report.fill('Test report');
+      await page.locator('[data-game-report="send"]').click();
+      await page.waitForFunction(() => /Grazie/.test(document.querySelector('[data-game-report="status"]').textContent));
+      if (!calls.reports?.[0] || calls.reports[0].kind !== 'bug') fail('report not posted');
+      await assertLayout(page, label, 'graphics (Italian)');
+      await page.screenshot({ path: SHOT('language', label) });
+      await page.locator('#gfx-back').click();
+      await visibleScreen(page, '.cd-pause');
+      await page.waitForFunction(() => document.querySelector('.cd-pause h2').textContent === 'In pausa');
+      if ((await debug(page)).tick !== t0) fail('the round advanced during the language switch');
+      await page.locator('.cd-pause .cd-btn', { hasText: 'Riprendi' }).click();
+      await visibleScreen(page, '.cd-hud');
+      await page.waitForFunction(() => /^Massa \d+/.test(document.querySelector('.cd-hud .cd-progress').textContent) &&
+        document.querySelector('.cd-hud .cd-pausebtn').textContent === 'Pausa');
+      await assertLayout(page, label, 'HUD (Italian)');
+      await page.locator('.cd-hud .cd-pausebtn').click();
+      await page.locator('.cd-pause .cd-btn', { hasText: 'Torna alle modalità' }).click();
+      await visibleScreen(page, '.cd-modesel');
+      await page.locator('.cd-modesel .cd-backbtn').click();
+      await visibleScreen(page, '.cd-title');
+      await page.locator('#cd-open-graphics').click();
+      await choice.scrollIntoViewIfNeeded();
+      await choice.selectOption('auto');
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA');
+      await page.locator('#gfx-back').click();
+      await visibleScreen(page, '.cd-title');
+      await page.waitForLoadState('networkidle');
+      await page.goto('about:blank');
+      await page.unroute(/\/api\/v1\//);
+      apiStubbed = false;
+      await page.goto(base, { waitUntil: 'networkidle' });
+      await visibleScreen(page, '.cd-title');
     });
   }
 

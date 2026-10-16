@@ -94,6 +94,35 @@
       root.CDPlatform.onLocalSave(wrapped); // host adapter mirrors to the cloud slot
   }
 
+  // ---------- cloud-save conflict merge
+  // Another device saved since this one last loaded: keep the better of each
+  // record so neither side's progress is lost; this device keeps its settings.
+  // Mutates and returns `local`.
+  function mergeProgress(local, remote) {
+    if (!remote || !remote.progress) return local;
+    var a = local.progress, b = remote.progress;
+    function maxMap(k) {
+      var out = Object.assign({}, b[k] || {});
+      Object.keys(a[k] || {}).forEach(function (id) { out[id] = Math.max(Number(out[id]) || 0, Number(a[k][id]) || 0); });
+      a[k] = out;
+    }
+    function orMap(k) {
+      var out = Object.assign({}, b[k] || {});
+      Object.keys(a[k] || {}).forEach(function (id) { if (a[k][id]) out[id] = true; });
+      a[k] = out;
+    }
+    ['journeyStars', 'journeyBest', 'challengeBest', 'dailiesDone'].forEach(maxMap);
+    ['lessonsDone', 'practiceDone', 'challengeDone'].forEach(orMap);
+    var ach = Object.assign({}, b.achievements || {});
+    Object.keys(a.achievements || {}).forEach(function (k) { ach[k] = ach[k] ? Math.min(ach[k], a.achievements[k]) : a.achievements[k]; });
+    a.achievements = ach;
+    var sa = a.stats || (a.stats = {}), sb = b.stats || {};
+    Object.keys(sb).forEach(function (k) { sa[k] = Math.max(Number(sa[k]) || 0, Number(sb[k]) || 0); });
+    var ds = a.dailyStreak || {}, rs = b.dailyStreak || {};
+    if (String(rs.last || '') > String(ds.last || '') || (rs.last === ds.last && (rs.count || 0) > (ds.count || 0))) a.dailyStreak = { last: rs.last || null, count: rs.count || 0 };
+    return local;
+  }
+
   // ---------- leaderboards (local; host adapter may sync)
   function loadBoards() {
     try {
@@ -121,7 +150,7 @@
     SAVE_VERSION: SAVE_VERSION,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     load: load, save: save, fresh: fresh, migrate: migrate,
-    checksum: checksum, loadRaw: loadRaw,
+    checksum: checksum, loadRaw: loadRaw, mergeProgress: mergeProgress,
     loadBoards: loadBoards, saveBoards: saveBoards, sortEntries: sortEntries
   };
 });

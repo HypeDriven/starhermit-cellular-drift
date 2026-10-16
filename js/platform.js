@@ -34,6 +34,7 @@ export function createPlatform() {
   let hooked = false;
   const syncListeners = [];
   const authListeners = [];
+  const conflictListeners = [];
 
   const signedIn = () => { const s = sdk(); return !!(s && s.signedIn); };
 
@@ -172,7 +173,17 @@ export function createPlatform() {
     const s = sdk();
     if (s && !hooked) {
       hooked = true;
-      s.on('saved', (ok) => setSync(ok ? 'synced' : 'offline'));
+      // A write that lost to a newer save on another device: the SDK emits
+      // 'saveconflict' and blocks writes until a reload. Reload the cloud copy
+      // and hand it to the game (onConflict) to merge and save again.
+      s.on('saveconflict', () => {
+        setSync('saving');
+        s.loadSave().then((raw) => {
+          if (s.saveConflicted()) { setSync('offline'); return; }
+          for (const fn of conflictListeners) { try { fn(raw); } catch { /* ignore */ } }
+        });
+      });
+      s.on('saved', (ok) => { if (!s.saveConflicted()) setSync(ok ? 'synced' : 'offline'); });
       s.on('auth', (a) => {
         if (!a.signedIn) { profile = null; reachable = false; setSync('offline'); }
         for (const fn of authListeners) { try { fn(a); } catch { /* ignore */ } }
@@ -209,6 +220,8 @@ export function createPlatform() {
     signIn() { const s = sdk(); return !!(s && s.signIn()); },
     onSync(fn) { if (typeof fn === 'function') syncListeners.push(fn); },
     onAuth(fn) { if (typeof fn === 'function') authListeners.push(fn); },
+    /** fn(rawRemote|null) after a save conflict: the newer cloud copy (wrapped doc string). */
+    onConflict(fn) { if (typeof fn === 'function') conflictListeners.push(fn); },
     get bindings() { return bindings; },
     get hosted() { return signedIn(); },
     get tokenHosted() { return signedIn(); },
