@@ -16,7 +16,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { detectPreset, describe, resolve, SHADOW_MAP } from './gfx.js';
+import { detectLevel, presetForLevel, describe, resolve, SHADOW_MAP } from './gfx.js';
 
 export const CAM = {
   FOLLOW_RATE: 6.5,      // critically damped follow stiffness
@@ -27,9 +27,6 @@ export const CAM = {
   BASE_HALF_H: 46
 };
 
-// particle budgets per `particles` tier (burst FX cap, drifting plankton count)
-const TIER_PARTICLES = { low: 300, high: 1200 };
-const TIER_DECOR = { low: 60, high: 240 };
 
 // Colour grade + vignette (display-space colours in, display-space out).
 const GradeShader = {
@@ -104,8 +101,10 @@ export function createRenderer(canvas, opts) {
   } catch (e) { gpu = ''; }
   const mobile = typeof matchMedia === 'function' && (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches)
     || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
-  const detected = detectPreset(gpu, mobile);
-  let q = resolve({}, detected);
+  // StarHermit hardware level → Auto preset (SwiftShader = level 0 → Low; phones cap at Balanced).
+  const level = detectLevel(gpu, globalThis.StarHermitGpu ? globalThis.StarHermitGpu.detectSystem() : { mobile });
+  const detected = presetForLevel(level);
+  let q = resolve({}, detected, level);
 
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 2000);
@@ -167,7 +166,7 @@ export function createRenderer(canvas, opts) {
     }
     const detailed = q.detail === 'detailed';
     // radial gradient floor texture (procedural, seeded decoration)
-    const size = detailed ? 1024 : 512;
+    const size = detailed ? q.budget.floorTexture : q.budget.floorTexture / 2; // per-preset texture variant
     const cv = document.createElement('canvas');
     cv.width = cv.height = size;
     const g = cv.getContext('2d');
@@ -316,7 +315,7 @@ export function createRenderer(canvas, opts) {
   }
 
   // ---------- cells (semantic views, pooled per entity id)
-  const cellGeo = new THREE.SphereGeometry(1, 28, 20);
+  let cellGeo = new THREE.SphereGeometry(1, ...q.budget.cellSegments); // LOD per preset (rebuilt in applyGraphics)
   const nucleusGeo = new THREE.SphereGeometry(1, 14, 10);
   const rimGeo = new THREE.RingGeometry(0.94, 1.06, 48);
   const cellViews = new Map(); // entityId -> {group, outer, nucleus, rim, hueKey}
@@ -335,7 +334,8 @@ export function createRenderer(canvas, opts) {
 
   function membraneMaterial(hue, isPlayer) {
     const detailed = q.detail === 'detailed';
-    const key = hue + (isPlayer ? 'p' : '') + (highContrast ? 'h' : '') + (detailed ? 'd' : '');
+    const kind = q.budget.material;
+    const key = hue + (isPlayer ? 'p' : '') + (highContrast ? 'h' : '') + (detailed ? 'd' : '') + kind;
     if (materialCache.has(key)) return materialCache.get(key);
     const base = isPlayer ? themeColor(theme.player) : new THREE.Color().setHSL(hue / 360, highContrast ? 0.95 : 0.62, highContrast ? 0.6 : 0.55);
     const common = {
@@ -347,7 +347,8 @@ export function createRenderer(canvas, opts) {
       emissive: base.clone().multiplyScalar(0.2),
       envMapIntensity: 0.55
     };
-    const mat = detailed
+    const lambert = () => { const { roughness, metalness, envMapIntensity, ...lp } = common; return new THREE.MeshLambertMaterial(lp); };
+    const mat = kind === 'lambert' ? lambert() : detailed && kind === 'physical'
       ? new THREE.MeshPhysicalMaterial(Object.assign(common, { roughness: 0.28, clearcoat: 0.8, clearcoatRoughness: 0.15, iridescence: 0.25, iridescenceIOR: 1.3, sheen: 0.2, sheenColor: base.clone().lerp(new THREE.Color(0xffffff), 0.5) }))
       : new THREE.MeshStandardMaterial(common);
     addMembraneRim(mat, detailed ? 1.1 : 0.8);
@@ -424,7 +425,7 @@ export function createRenderer(canvas, opts) {
   let decorPoints = null;
   function buildDecor(arenaRadius) {
     if (decorPoints) { scene.remove(decorPoints); decorPoints.geometry.dispose(); decorPoints.material.dispose(); }
-    const n = TIER_DECOR[q.particles] || 100;
+    const n = q.budget.decor;
     const pos = new Float32Array(n * 3);
     let s = decorSeed ^ 0x5f3759df;
     const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
@@ -459,7 +460,7 @@ export function createRenderer(canvas, opts) {
 
   function spawnFx(x, y, count, color, speed) {
     if (reducedMotion) count = Math.min(count, 3);
-    const cap = TIER_PARTICLES[q.particles] || MAX_FX;
+    const cap = Math.min(q.budget.particles, MAX_FX);
     fxPoints.material.color.set(color);
     fxColor.set(color);
     for (let i = 0; i < count && fx.n < cap; i++) {
@@ -522,7 +523,7 @@ export function createRenderer(canvas, opts) {
     const w = canvas.clientWidth || canvas.parentElement.clientWidth || 1;
     const h = canvas.clientHeight || canvas.parentElement.clientHeight || 1;
     aspect = w / h;
-    const ratio = Math.min(window.devicePixelRatio || 1, 2) * q.scale * adaptiveScale;
+    const ratio = Math.min(window.devicePixelRatio || 1, q.budget.dprCap) * q.scale * adaptiveScale;
     if (w !== size[0] || h !== size[1] || ratio !== pixelRatio) {
       size = [w, h];
       pixelRatio = ratio;
@@ -630,7 +631,7 @@ export function createRenderer(canvas, opts) {
 
   // Apply resolved graphics settings live (no reload).
   function applyGraphics(saved) {
-    q = resolve(saved || {}, detected);
+    q = resolve(saved || {}, detected, level);
     const mapSize = SHADOW_MAP[q.shadows];
     renderer.shadowMap.enabled = mapSize > 0;
     key.castShadow = mapSize > 0;
@@ -653,6 +654,11 @@ export function createRenderer(canvas, opts) {
     materialCache.clear();
     for (const [, v] of cellViews) scene.remove(v.group);
     cellViews.clear();
+    const seg = cellGeo.parameters;
+    if (seg.widthSegments !== q.budget.cellSegments[0] || seg.heightSegments !== q.budget.cellSegments[1]) {
+      cellGeo.dispose();
+      cellGeo = new THREE.SphereGeometry(1, ...q.budget.cellSegments);
+    }
     scene.traverse((o) => {
       if (!o.material) return;
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.needsUpdate = true;
@@ -929,7 +935,7 @@ export function createRenderer(canvas, opts) {
     graphicsInfo() {
       const px = [Math.round(size[0] * pixelRatio), Math.round(size[1] * pixelRatio)];
       return {
-        gpu: gpu || 'unknown GPU', detected, mobile, resolved: q,
+        gpu: gpu || 'unknown GPU', level, detected, mobile, resolved: q,
         summary: describe(q, px), pixels: px, fps: Math.round(fps),
         adaptiveScale, postFailed
       };

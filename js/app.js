@@ -557,6 +557,7 @@ function refreshGraphicsPanel() {
   g.showFps.checked = !!saved.show_fps;
   const parts = [
     info.gpu === 'unknown GPU' ? T('unknownGpu') : info.gpu,
+    info.level != null ? T('level', { n: info.level }) : null,
     r.shadows === 'off' ? T('s_noShadows') : T('s_shadows', { n: SHADOW_MAP[r.shadows] }),
     r.bloom === 'on' ? T('s_bloom') : null,
     r.grade === 'on' ? T('s_grade') : null,

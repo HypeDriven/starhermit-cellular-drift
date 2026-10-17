@@ -28,25 +28,72 @@ const TABLE = {
 
 export const SHADOW_MAP = { off: 0, low: 1024, medium: 2048, high: 4096 };
 
+// Auto picks the preset from the StarHermit hardware level (0 = Galaxy S20 / Intel UHD, 20 = RTX 5090;
+// gpu-level.js → window.StarHermitGpu): Low from 0, Balanced from 4, High from 10, Ultra from 17.
+// Phones, tablets and ≤ 4 GB machines are capped at level 9 (Balanced); software renderers are level 0.
+export const PRESET_LEVELS = { low: 0, balanced: 4, high: 10, ultra: 17 };
+
+function gpuApi() { return globalThis.StarHermitGpu; }
+
+/** Hardware level (0–20) for an unmasked renderer string plus StarHermitGpu.detectSystem() facts. */
+export function detectLevel(gpu, system) {
+  const G = gpuApi();
+  if (!G) return PRESET_LEVELS.balanced;
+  return G.detectLevel({ ...(system || {}), gpu: String(gpu || '') });
+}
+
+/** The preset Auto starts from for a hardware level. */
+export function presetForLevel(level) {
+  const G = gpuApi();
+  if (G) return G.presetForLevel(level, PRESET_LEVELS);
+  return level >= 17 ? 'ultra' : level >= 10 ? 'high' : level >= 4 ? 'balanced' : 'low';
+}
+
+/** Best preset for this GPU (the level already caps phones/tablets at Balanced). */
+export function detectPreset(gpu, system) {
+  return presetForLevel(detectLevel(gpu, system));
+}
+
+/** Scale a count tuned at the preset's floor level up for faster GPUs (≤ 4×, never below the floor budget). */
+export function scaleCount(n, preset, level) {
+  const G = gpuApi();
+  const floor = PRESET_LEVELS[preset] || 0;
+  return Math.round(G ? G.scaleBudget(n, Math.max(Number(level) || 0, floor), floor) : n);
+}
+
 /**
- * Best preset for this GPU, from the WEBGL_debug_renderer_info unmasked renderer
- * string. Software renderers get Low, discrete GPUs / Apple M get High, the rest
- * Balanced. Touch/mobile devices are capped at Balanced.
+ * Per-preset asset and effect budget. Each preset is tuned to hold 60 FPS on the weakest GPU Auto gives
+ * it (Low → hardware level 0, Balanced → 4, High → 10, Ultra → 17; measured with tests/gfx-bench.mjs).
+ *   dprCap       device-pixel-ratio ceiling (before the preset's render scale);
+ *   floorTexture dish-floor texture edge in px (Surface detail plain uses half);
+ *   cellSegments membrane sphere [width, height] segments; material: 'lambert' | 'standard' | 'physical'
+ *                (clearcoat + iridescence when Surface detail is detailed);
+ *   particles    burst-particle budget and decor = drifting plankton at the floor level (the Particles
+ *                tier still caps both). Counts scale up within the preset on faster GPUs
+ *                (StarHermitGpu.scaleBudget, ≤ 4×, never below the floor budget).
  */
-export function detectPreset(gpu, mobile) {
-  const g = String(gpu || '').toLowerCase();
-  let p = 'balanced';
-  if (/swiftshader|llvmpipe|softpipe|software|basic render/.test(g)) p = 'low';
-  else if (/nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|amd radeon(?!.*graphics)|apple m\d/.test(g)) p = 'high';
-  if (mobile && PRESETS.indexOf(p) > PRESETS.indexOf('balanced')) p = 'balanced';
-  return p;
+export const BUDGETS = {
+  low: { dprCap: 1, floorTexture: 512, cellSegments: [16, 10], material: 'lambert', particles: 200, decor: 50 },
+  balanced: { dprCap: 1.5, floorTexture: 1024, cellSegments: [24, 16], material: 'standard', particles: 500, decor: 120 },
+  high: { dprCap: 2, floorTexture: 1024, cellSegments: [28, 20], material: 'physical', particles: 900, decor: 200 },
+  ultra: { dprCap: 2, floorTexture: 2048, cellSegments: [40, 28], material: 'physical', particles: 1200, decor: 320 },
+};
+export const PARTICLE_CAP = { low: 300, high: 1200 }; // per Particles tier
+export const DECOR_CAP = { low: 60, high: 480 };
+
+/** A preset's concrete budget for a hardware level and Particles tier. */
+export function budgetFor(preset, level, particles = 'high') {
+  const b = { ...(BUDGETS[preset] || BUDGETS.balanced) };
+  b.particles = Math.min(PARTICLE_CAP[particles] || PARTICLE_CAP.low, scaleCount(b.particles, preset, level));
+  b.decor = Math.min(DECOR_CAP[particles] || DECOR_CAP.low, scaleCount(b.decor, preset, level));
+  return b;
 }
 
 /**
  * Resolve saved settings into concrete tiers.
  * `saved`: { preset: 'auto'|preset, render_scale, adaptive, show_fps, <category>: 'preset'|tier }.
  */
-export function resolve(saved, detected) {
+export function resolve(saved, detected, level) {
   const s = saved || {};
   const auto = !PRESETS.includes(s.preset);
   const preset = auto ? (PRESETS.includes(detected) ? detected : 'balanced') : s.preset;
@@ -55,6 +102,7 @@ export function resolve(saved, detected) {
   for (const cat of Object.keys(CATEGORIES)) {
     out[cat] = CATEGORIES[cat].includes(s[cat]) ? s[cat] : row[cat];
   }
+  out.budget = budgetFor(preset, level, out.particles);
   out.adaptive = s.adaptive !== false;
   out.showFps = !!s.show_fps;
   // Post-processing runs only when something needs it; otherwise the canvas MSAA is used.

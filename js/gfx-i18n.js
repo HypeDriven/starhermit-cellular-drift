@@ -15,7 +15,8 @@ const en = {
   t_fxaa: 'FXAA', t_smaa: 'SMAA', t_msaa: 'MSAA', t_static: 'Static', t_animated: 'Animated', t_plain: 'Plain', t_detailed: 'Detailed',
   s_shadows: '{n}² shadows', s_noShadows: 'no shadows', s_bloom: 'glow', s_grade: 'grade', s_reflections: 'reflections', s_noAA: 'no anti-aliasing',
   postFailed: 'Post-processing is unavailable on this device, so glow, color grade and FXAA/SMAA are off.',
-  unknownGpu: 'unknown GPU'
+  unknownGpu: 'unknown GPU',
+    level: 'Level {n}'
 };
 
 const STRINGS = {
@@ -36,7 +37,8 @@ const STRINGS = {
     t_fxaa: 'FXAA', t_smaa: 'SMAA', t_msaa: 'MSAA', t_static: 'Estáticos', t_animated: 'Animados', t_plain: 'Simple', t_detailed: 'Detallado',
     s_shadows: 'sombras {n}²', s_noShadows: 'sin sombras', s_bloom: 'resplandor', s_grade: 'color', s_reflections: 'reflejos', s_noAA: 'sin antialiasing',
     postFailed: 'El posprocesado no está disponible en este dispositivo: el resplandor, la corrección de color y FXAA/SMAA están desactivados.',
-    unknownGpu: 'GPU desconocida'
+    unknownGpu: 'GPU desconocida',
+    level: 'Nivel {n}'
   },
   'es-ES': {
     graphics: 'Gráficos', settingsTitle: 'Ajustes gráficos', back: 'Volver',
@@ -50,7 +52,8 @@ const STRINGS = {
     t_fxaa: 'FXAA', t_smaa: 'SMAA', t_msaa: 'MSAA', t_static: 'Estáticos', t_animated: 'Animados', t_plain: 'Simple', t_detailed: 'Detallado',
     s_shadows: 'sombras {n}²', s_noShadows: 'sin sombras', s_bloom: 'resplandor', s_grade: 'etalonaje', s_reflections: 'reflejos', s_noAA: 'sin suavizado',
     postFailed: 'El posprocesado no está disponible en este dispositivo: el resplandor, el etalonaje y FXAA/SMAA están desactivados.',
-    unknownGpu: 'GPU desconocida'
+    unknownGpu: 'GPU desconocida',
+    level: 'Nivel {n}'
   },
   'de-DE': {
     graphics: 'Grafik', settingsTitle: 'Grafikeinstellungen', back: 'Zurück',
@@ -64,7 +67,8 @@ const STRINGS = {
     t_fxaa: 'FXAA', t_smaa: 'SMAA', t_msaa: 'MSAA', t_static: 'Statisch', t_animated: 'Animiert', t_plain: 'Schlicht', t_detailed: 'Detailliert',
     s_shadows: '{n}²-Schatten', s_noShadows: 'keine Schatten', s_bloom: 'Leuchten', s_grade: 'Farbkorrektur', s_reflections: 'Spiegelungen', s_noAA: 'keine Kantenglättung',
     postFailed: 'Nachbearbeitung ist auf diesem Gerät nicht verfügbar, daher sind Leuchten, Farbkorrektur und FXAA/SMAA aus.',
-    unknownGpu: 'unbekannte GPU'
+    unknownGpu: 'unbekannte GPU',
+    level: 'Stufe {n}'
   },
   'fr-FR': {
     graphics: 'Graphismes', settingsTitle: 'Paramètres graphiques', back: 'Retour',
@@ -78,7 +82,8 @@ const STRINGS = {
     t_fxaa: 'FXAA', t_smaa: 'SMAA', t_msaa: 'MSAA', t_static: 'Statique', t_animated: 'Animé', t_plain: 'Simple', t_detailed: 'Détaillé',
     s_shadows: 'ombres {n}²', s_noShadows: 'sans ombres', s_bloom: 'halo', s_grade: 'étalonnage', s_reflections: 'reflets', s_noAA: 'sans anticrénelage',
     postFailed: 'Le post-traitement n’est pas disponible sur cet appareil : le halo, l’étalonnage et FXAA/SMAA sont désactivés.',
-    unknownGpu: 'GPU inconnu'
+    unknownGpu: 'GPU inconnu',
+    level: 'Niveau {n}'
   },
   'fr-CA': {
     graphics: 'Graphismes', settingsTitle: 'Paramètres graphiques', back: 'Retour',
@@ -92,7 +97,8 @@ const STRINGS = {
     t_fxaa: 'FXAA', t_smaa: 'SMAA', t_msaa: 'MSAA', t_static: 'Statique', t_animated: 'Animé', t_plain: 'Simple', t_detailed: 'Détaillé',
     s_shadows: 'ombres {n}²', s_noShadows: 'sans ombres', s_bloom: 'lueur', s_grade: 'couleurs', s_reflections: 'reflets', s_noAA: 'sans anticrénelage',
     postFailed: 'Le post-traitement n’est pas offert sur cet appareil : la lueur, la correction des couleurs et FXAA/SMAA sont désactivées.',
-    unknownGpu: 'GPU inconnu'
+    unknownGpu: 'GPU inconnu',
+    level: 'Niveau {n}'
   },
   'pt-BR': {
     graphics: 'Gráficos', settingsTitle: 'Configurações gráficas', back: 'Voltar',
@@ -106,7 +112,8 @@ const STRINGS = {
     t_fxaa: 'FXAA', t_smaa: 'SMAA', t_msaa: 'MSAA', t_static: 'Estática', t_animated: 'Animada', t_plain: 'Simples', t_detailed: 'Detalhado',
     s_shadows: 'sombras {n}²', s_noShadows: 'sem sombras', s_bloom: 'brilho', s_grade: 'cor', s_reflections: 'reflexos', s_noAA: 'sem antisserrilhamento',
     postFailed: 'O pós-processamento não está disponível neste dispositivo; brilho, correção de cor e FXAA/SMAA estão desligados.',
-    unknownGpu: 'GPU desconhecida'
+    unknownGpu: 'GPU desconhecida',
+    level: 'Nível {n}'
   },
   'it-IT': {
     graphics: 'Grafica', settingsTitle: 'Impostazioni grafiche', back: 'Indietro',
@@ -120,7 +127,8 @@ const STRINGS = {
     t_fxaa: 'FXAA', t_smaa: 'SMAA', t_msaa: 'MSAA', t_static: 'Statico', t_animated: 'Animato', t_plain: 'Semplice', t_detailed: 'Dettagliato',
     s_shadows: 'ombre {n}²', s_noShadows: 'senza ombre', s_bloom: 'bagliore', s_grade: 'colore', s_reflections: 'riflessi', s_noAA: 'senza antialiasing',
     postFailed: 'La post-elaborazione non è disponibile su questo dispositivo: bagliore, correzione colore e FXAA/SMAA sono disattivati.',
-    unknownGpu: 'GPU sconosciuta'
+    unknownGpu: 'GPU sconosciuta',
+    level: 'Livello {n}'
   }
 };
 

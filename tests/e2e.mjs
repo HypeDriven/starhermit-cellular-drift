@@ -105,7 +105,21 @@ async function assertLayout(page, label, stage) {
 
 // ---------- render probe: is the player's cell actually drawn where the rules say?
 async function assertPlayerRendered(page, label, stage) {
-  const r = await page.evaluate(() => new Promise((resolve) => {
+  // Phones pace Auto at half the refresh rate, so a given animation frame may not redraw the canvas
+  // (its drawing buffer is then already cleared): probe a few frames until one carries a rendered image.
+  let r;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    r = await probeFrame(page);
+    if (r.brightFrac > 0) break;
+  }
+  if (r.w < 50 || r.h < 50) fail(`[${label}] ${stage}: canvas has no size (${r.w}x${r.h})`);
+  if (r.brightFrac === 0) fail(`[${label}] ${stage}: canvas is a uniformly dark void (nothing rendered)`);
+  if (!r.screen) fail(`[${label}] ${stage}: no player centroid to render`);
+  if (r.matched === 0) fail(`[${label}] ${stage}: player cell (${r.playerColor}) not drawn at its projected position ${JSON.stringify(r.screen)} (probed ${r.probed}px, bright frame fraction ${r.brightFrac.toFixed(3)})`);
+}
+
+function probeFrame(page) {
+  return page.evaluate(() => new Promise((resolve) => {
     requestAnimationFrame(() => {
       const d = window.CDApp.debug();
       const gl = document.getElementById('cd-canvas');
@@ -145,10 +159,6 @@ async function assertPlayerRendered(page, label, stage) {
       resolve({ w, h, brightFrac: bright / Math.max(1, samples), matched, probed, playerColor: pc, screen: d.screen, phase: d.phase });
     });
   }));
-  if (r.w < 50 || r.h < 50) fail(`[${label}] ${stage}: canvas has no size (${r.w}x${r.h})`);
-  if (r.brightFrac === 0) fail(`[${label}] ${stage}: canvas is a uniformly dark void (nothing rendered)`);
-  if (!r.screen) fail(`[${label}] ${stage}: no player centroid to render`);
-  if (r.matched === 0) fail(`[${label}] ${stage}: player cell (${r.playerColor}) not drawn at its projected position ${JSON.stringify(r.screen)} (probed ${r.probed}px, bright frame fraction ${r.brightFrac.toFixed(3)})`);
 }
 
 async function assertNoBootFailure(page, label) {
@@ -230,6 +240,7 @@ async function runPass(browser, pass) {
     await page.waitForTimeout(300);
     let summary = (await page.locator('#gfx-summary').textContent()) || '';
     if (!/2048² shadows/.test(summary) || !/glow/.test(summary) || !/\d+×\d+ px/.test(summary)) fail(`High summary "${summary}"`);
+    if (!/ · Level 0 · /.test(summary)) fail(`summary lacks the hardware level: "${summary}"`);
     await page.locator('#gfx-bloom').selectOption('off');
     summary = (await page.locator('#gfx-summary').textContent()) || '';
     if (/glow/.test(summary)) fail(`bloom override not applied: "${summary}"`);
