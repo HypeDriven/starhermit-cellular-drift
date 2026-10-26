@@ -1,71 +1,18 @@
-<!DOCTYPE html>
+<!doctype html>
+<!-- StarHermit web loader, written by starhermit package --web: it pins the engine by hash and holds no script of its own; package again rather than edit it. -->
 <html lang="en">
 <head>
-  <link rel="icon" href="favicon.png" type="image/png">
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="icon.png">
 <title>Cellular Drift</title>
-<!-- ASSET VERSION: bump the v= tag on every reference below together (tests/e2e.mjs checks they match) -->
-<link rel="stylesheet" href="./css/style.css?v=20261017a" />
-<script src="game-options.js" data-game="cellular-drift"></script>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js?v=20261017a","three/addons/":"./vendor/three/addons/"}}</script>
-<script src="ui-scale.js"></script>
-<script src="./starhermit-sdk.js?v=20261017a"></script>
-<script>StarHermit.init();</script>
-<script src="./js/rng.js?v=20261017a"></script>
-<script src="./js/rules.js?v=20261017a"></script>
-<script src="./js/content.js?v=20261017a"></script>
-<script src="./js/store.js?v=20261017a"></script>
-<script src="./sh-language.js?v=20261017a"></script>
-<script src="./js/strings.js?v=20261017a"></script>
-<script src="./js/i18n.js?v=20261017a"></script>
-<style>
-  :root { --bg:#071c26; }
-  html,body{margin:0;padding:0;height:100%;background:#04131b;color:#eafcff;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;}
-  .cd-bootfail{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;background:#04131b;}
-  .cd-bootfail p{max-width:40em;margin:0;opacity:0.85;}
-  .cd-bootfail button{padding:12px 22px;font:inherit;color:#eafcff;background:rgba(79,216,194,0.12);border:1px solid rgba(79,216,194,0.55);border-radius:10px;cursor:pointer;}
-</style>
-<script>
-  // Boot watchdog: a game that never draws its title screen must say so instead
-  // of sitting on a dark page. Cleared by app.js once the UI is built.
-  (function () {
-    var failed = false;
-    function tr(k, v) { return window.CDI18N ? window.CDI18N.T(k, v) : k.replace('{reason}', v ? v.reason : ''); }
-    function fail(reason) {
-      if (failed || document.body.getAttribute('data-cd-booted')) return;
-      failed = true;
-      var box = document.createElement('section');
-      box.className = 'cd-bootfail';
-      box.setAttribute('role', 'alert');
-      var T = function (k, v) { return window.CDI18N ? window.CDI18N.T(k, v) : k.replace('{reason}', v ? v.reason : ''); };
-      var h2 = document.createElement('h2'), p1 = document.createElement('p'), p2 = document.createElement('p');
-      h2.textContent = T('Cellular Drift could not start');
-      p1.textContent = reason;
-      p2.textContent = T('Reload to fetch a fresh copy. If it keeps happening, your browser may be blocking modern JavaScript modules or WebGL.');
-      box.appendChild(h2); box.appendChild(p1); box.appendChild(p2);
-      var btn = document.createElement('button');
-      btn.textContent = T('Reload');
-      btn.addEventListener('click', function () { location.reload(); });
-      box.appendChild(btn);
-      document.body.appendChild(box);
-    }
-    window.__cdBootFail = fail;
-    window.addEventListener('error', function (e) {
-      if (e && e.message) fail(tr('A script failed to load or run: {reason}', { reason: e.message }));
-    });
-    window.addEventListener('unhandledrejection', function (e) {
-      var r = e && e.reason;
-      fail(tr('Startup failed: {reason}', { reason: r && r.message ? r.message : String(r) }));
-    });
-    window.addEventListener('load', function () {
-      setTimeout(function () { fail(tr('The game did not finish loading in time (a script or the 3D renderer is missing or blocked).')); }, 8000);
-    });
-  })();
-</script>
-<script src="./js/gpu-level.js?v=20261017a"></script>
-<script type="module" src="./js/app.js?v=20261017a"></script>
-<script src="browser-guard.js"></script>
+<style>html,body{margin:0;height:100%;background:#000;color:#eee;font:16px/1.5 system-ui,sans-serif}canvas{display:block;width:100%;height:100%}.starhermit-message{position:fixed;inset:0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;background:#000}.starhermit-message[hidden]{display:none}.starhermit-late{animation:starhermit-late 0s 20s both}@keyframes starhermit-late{from{visibility:hidden}to{visibility:visible}}</style>
+<script type="module" src="https://wiki.starhermit.com/engine/1.15.0/starhermit.js" integrity="sha384-tEcu5EXFWPK7ukxbHKRmHs4wN7mWEB+3OEEfhs9kVF+w86qBVP0T3yG3y6US3FKu" crossorigin="anonymous"></script>
+<script type="application/json" id="starhermit-config">{"manifest":{"integrity":"sha384-MqzawEdIQy9IvpDJWkOpdYqncjNA1n7L2CIlTrMfQC1hdcn2JF+eQYXmnSNdPh6K","url":"https://wiki.starhermit.com/engine/1.15.0/manifest.json"}}</script>
 </head>
-<body></body>
+<body>
+<canvas></canvas>
+<div id="starhermit-status" class="starhermit-message" role="status"><span>Loading Cellular Drift…</span><span class="starhermit-late">If the game has not started, this browser cannot run it or its engine (StarHermit 1.15.0) could not be loaded: reload the page, or open it in a current Chrome, Edge, Firefox or Safari.</span></div>
+<noscript><p class="starhermit-message">This game needs JavaScript.</p></noscript>
+</body>
 </html>
