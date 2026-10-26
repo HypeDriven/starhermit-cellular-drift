@@ -1,50 +1,45 @@
 # Cellular Drift — Game Design Document (running spec)
 
-This document describes Cellular Drift as it ships today. Present tense throughout; where the design calls for something the code does not yet do, it is listed under "Design intent not yet implemented" at the end and nowhere else.
+This document describes Cellular Drift as it ships today: a StarHermit engine script game (engine 1.15.0, host API 1.17), played natively by the StarHermit client and in browsers by the engine's web runtime. Present tense throughout; where the design calls for something the code does not yet do, it is listed under "Design intent not yet implemented" at the end and nowhere else.
 
 ## 1. Overview
 
-**Pitch.** You are one translucent cell in a lit petri dish. Drift toward the pointer, graze on nutrient motes, split to lunge, eject to shed weight, and outgrow the rivals that hunt you — before a barb bursts you or the clock runs out.
+**Pitch.** You are one translucent cell in a lit petri dish. Drift toward the pointer (or steer with keys or a stick), graze on nutrient motes, split to lunge, eject to shed weight, and outgrow the rivals that hunt you — before a barb bursts you or the clock runs out.
 
 | | |
 |---|---|
 | Genre | Realtime mass arena, single player versus seeded AI rivals |
 | Players | 1 human (`p0`) plus 0–10 AI rivals per content item |
 | Session | 30 s (Lesson 1) to 4 min (Apex Culture); rounds hard-capped at 30 sim-minutes |
-| Platforms | Desktop and mobile browsers with WebGL; portrait and landscape |
-| Rendering | Three.js r160 (`vendor/three.module.js`, addons from the same release under `vendor/three/addons/`), orthographic top-down camera, optional post-processing, semantic HTML overlay for every menu and the HUD |
-| Simulation | Fixed 30 Hz deterministic step in `js/rules.js`; rendering interpolates between ticks |
-| Persistence | Versioned, checksummed `localStorage` document (`js/store.js`) |
-| Server | `score-script.js` — StarHermit platform script that posts finished rounds to the leaderboard; `server.js` — local dev server: static files with revalidating headers, `/api/v1/time`, legacy `/api/v1/scores` (no longer called) |
+| Platforms | StarHermit client (Windows/Linux, native engine) and browsers (engine web runtime); desktop, phone portrait and landscape; keyboard, mouse, touch, gamepad |
+| Rendering | `starhermit:scene` (three.js-like): orthographic top-down camera, WGSL caustic and rim-halo shaders, renderer bloom / grade / anti-aliasing per graphics level; `starhermit:ui` immediate-mode menus and HUD |
+| Simulation | The runtime's fixed steps at the rules' 30 Hz (`setFixedRate(R.TICK_RATE)`), deterministic `js/rules.js`; rendering interpolates between ticks |
+| Persistence | The engine save (`starhermit:storage` `saves`, `{ v: 1, progress }`, device + cloud slot), the game's settings (`settings`, synced), the device round board (`storage`) |
+| Server | `score-script.js` — StarHermit platform script that range-checks and posts finished rounds to the `high-score` board; `server.js` — local dev server only (static files, `/api/v1/time`) |
 
 ### File map
 
 | Path | Responsibility |
 |---|---|
-| `index.html` | Entry point; loads CSS, import map (`three`, `three/addons/`), classic scripts (`rng`, `rules`, `content`, `store`) then the `app.js` module; boot watchdog that shows "Cellular Drift could not start" after 8 s |
-| `js/rng.js` | mulberry32 PRNG, FNV-1a `hashString`, three derived streams (rules / decor / AV) |
-| `js/rules.js` | The whole rules engine: `createGame`, `applyCommand`, `step`, `legalActions`, `hint`, `scoreBreakdown`, `rankings`, `serialize`/`deserialize`, `stateHash` |
-| `js/content.js` | Themes, 6 lessons, 40 journey stages, daily generator, 3 practice presets, 6 challenges, `toConfig`, `validateContent` |
-| `js/store.js` | Save document (settings + progress), local leaderboard entries, tie-break sort |
-| `js/app.js` | UI shell (all screens built once), input, fixed-step loop, HUD, results, persistence, score submission, `window.CDApp.debug()` |
-| `js/render.js` | Three.js scene: environment, pooled cell views, instanced motes/pellets, barbs, FX particles, marker/hint rings, camera, lighting/shadows, post-processing chain, adaptive resolution, `setGraphics`/`graphicsInfo` |
-| `js/gfx.js` | Pure graphics quality model: presets, categories, per-preset `BUDGETS`, hardware-level `detectLevel`/`detectPreset`, `resolve`, `presetTier`, `withPreset`, `describe` |
-| `js/gfx-i18n.js` | Graphics panel strings for en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT; locale from the game language |
-| `sh-language.js` | Shared StarHermit language preference (`window.StarHermitLanguage`), verbatim copy of the canonical `tools/sh-language.js` |
-| `js/strings.js`, `js/i18n.js` | Translation tables for every other player-facing string (`window.CD_STRINGS`) and the localizer (`window.CDI18N`) driving the Language setting |
-| `vendor/three/addons/` | three r160 (npm 0.160.1) `EffectComposer`, `RenderPass`, `ShaderPass`, `OutputPass`, `UnrealBloomPass`, `SMAAPass`, `MaskPass`, `Pass`, their shaders, `RoomEnvironment` |
-| `js/audio.js` | WebAudio: 4 buses, sampled events with synth fallback, procedural pad music, ambience bed + authored loop, captions |
-| `js/platform.js` | Adapter over `window.StarHermit`: server-time sync with 2.5 s timeout, leaderboard posting (`submitScore`) |
-| `js/platform-strings.js` | StarHermit UI strings (sign in, invite, toasts, leaderboard line) in the nine locales |
-| `score-script.js` | StarHermit platform script (`server=`): range-checks a round total and posts it to the `high-score` board (canonical copy in the games repo's `tools/score-script.js`) |
-| `css/style.css` | Layout shell, screens, buttons, HUD tray, captions, results breakdown, title/results art |
-| `sfx/` | 18 Opus clips; `manifest.txt` (canonical), `manifest.json` (generator input), `manifest.md` (generated) |
-| `assets/` | `title-backdrop.webp`, `results-vignette.webp` |
-| `coverart.png`, `icon.png`, `favicon.svg` | Platform cover (1200x675), 256 px icon, tab icon |
-| `tests/gfx.test.mjs` | `npm test` (node --test): hardware level → preset, per-preset budgets, preset/override/scale resolution, preset clears overrides, panel strings in every locale |
-| `tests/rules-regression.mjs` | `npm test`: determinism, duplicate rejection, constraint rule, content validation |
-| `tests/e2e.mjs` | `npm run test:e2e`: headless Chrome playthrough on 4 viewports through the real UI |
-| `starhermit.txt` | `name=Cellular Drift`, `launch=index.html`, `server=score-script.js`, `cover=coverart.png` |
+| `starhermit.txt` | Manifest: name, description, owner, cover, `server=score-script.js`, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.15.0`, `engine.minor=17`, `engine.capabilities=platform,storage,clipboard`, `control.*` keys, `engine.group.*`, `engine.gamepad.*` |
+| `index.html`, `starhermit-files.json` | The engine's web loader page and file index, written by `npm run package` (`starhermit package --web .`); never edited by hand |
+| `native/main.ts` | Entry: screen flow, `startRound` for every mode, steering (pointer, keys, stick), Split / Eject / Hint, per-tick stat diffs → audio and shake, music intensity and danger ping, results with progression, achievements, the device board and score posting, lifecycle |
+| `native/screens.ts` | Every screen and the HUD in `starhermit:ui`, the toast and caption strip, the results vignette and the drawn medal |
+| `native/render.ts` | The dish on `starhermit:scene`: floor canvas texture, caustics, rim and halo, rings, pooled cell views, instanced motes and pellets, barbs, plankton, burst particles, marker and hint rings, camera follow / zoom / shake, look per graphics level |
+| `native/audio.ts` | One-shot clips on the runtime's buses, the ambience loop, the adaptive pentatonic pad rendered into clips, captions |
+| `native/platform.ts` | Save, conflict merge and the browser build's foreign save; game settings and legacy settings migration; device board; platform clock; player, invite link; score posting |
+| `native/quality.ts` | The browser build's graphics presets and budgets keyed by the runtime's quality tier and level |
+| `native/style.ts`, `assets/ui-style.json`, `tools/ui-style.css` | The UI style sheet (class-based CSS converted with `starhermit css`), tokens and the high-contrast token set |
+| `native/i18n.ts` | Locale from the runtime's interface language, `T()` over `js/strings.js` |
+| `native/classic.ts` | Loads the classic UMD scripts (`loadClassic`) with a `localStorage` shim over device storage, types for what the client reads |
+| `js/rng.js`, `js/rules.js`, `js/content.js`, `js/store.js` | Unchanged browser-build rules engine, content, save document and merge (UMD; shared with the Node tests) |
+| `js/migrate.js` | The engine save document and the browser build's account data (foreign save, legacy settings) as the engine client takes them over |
+| `js/strings.js` | Translation tables (English text is the key) for the nine locales |
+| `sfx/` | 18 Opus clips; `manifest.txt` (canonical), `manifest.json`, `manifest.md` |
+| `assets/` | `title-backdrop.webp`, `results-vignette.webp`, `ui-style.json` |
+| `cover.jpg`, `coverart.png`, `icon.png` | Platform cover, cover art, icon |
+| `tests/` | `npm test`: i18n, migration, rules regression, `native.mjs` (tsc, `starhermit check`, play scripts, web index) |
+| `tools/` | `package-web.mjs`, `css.mjs`, `plan.mjs` (keyboard bot), `gen-plays.mjs` (play scripts from plans), `browser-play.mjs` (headless Chrome) |
 
 ## 2. Vision and design pillars
 
@@ -132,7 +127,7 @@ Journey stars (`app.js showResults`): `1 + (tick ≤ parTicks) + (invalidCount =
 
 ### RNG and seeding
 
-`createGame` hashes a string seed with FNV-1a; the rules stream starts at `seed ^ 0x9e3779b9` and is stored in `state.rngState`, so `serialize()` captures everything. Content seeds are literal strings (`'lesson-1'`, `'journey-17'`, `'daily:2026-09-08'`, `'practice-calm'`, `'challenge-apex'`). Rival names, skills and hues come from a separate LCG on `hashString('names:' + seed)`. `render.js` derives decor blotches and drift particles from `game.seed`; `audio.js` seeds ±6 % pitch variants from it. `stateHash` covers tick, phase, rng, entity ids/positions/masses (×1000 rounded), and player alive/invalid counts.
+`createGame` hashes a string seed with FNV-1a; the rules stream starts at `seed ^ 0x9e3779b9` and is stored in `state.rngState`, so `serialize()` captures everything. Content seeds are literal strings (`'lesson-1'`, `'journey-17'`, `'daily:2026-09-08'`, `'practice-calm'`, `'challenge-apex'`). Rival names, skills and hues come from a separate LCG on `hashString('names:' + seed)`. `native/render.ts` derives decor blotches and drift particles from `game.seed`; `native/audio.ts` seeds ±6 % pitch variants from it. `stateHash` covers tick, phase, rng, entity ids/positions/masses (×1000 rounded), and player alive/invalid counts.
 
 ### Hints and undo
 
@@ -146,38 +141,44 @@ All modes funnel through `startRound(content, mode)`; `content.toConfig` turns a
 |---|---|---|---|
 | Learn | 6 lessons (`LESSONS`): Drift, Graze, Eject, Divide, Barbs, Hunt | 0 rivals except Hunt (2 at skill 0.2); small arenas 320–520; 1–4 min limits | `lessonsDone[id]` on win |
 | Journey | 40 generated stages `j01..j40`, 8 per theme tier; every 8th is a mastery stage | arena `560 + 40·tier`, goal `80 + 25·tier + 8·step` (×1.35 mastery), rivals 0→4 (+2 mastery, max 6), skill 0.25→0.83, barbs 0→5 | `journeyStars[id]` (1–3), `journeyBest[id]` |
-| Daily Challenge | `dailyFor(platform.now())`: one descriptor per UTC day, `ranked: true` | arena 580–700, 130–170 motes, 3–6 rivals at skill 0.4–0.7, 2–6 barbs, 3 min, goal 140–220, theme by hash | `dailiesDone[day]` = best score, `dailyStreak {last, count}` (consecutive UTC days) |
+| Daily Challenge | `dailyFor(platform.now())`: one descriptor per UTC day of the platform clock (`serverNow`; the device's UTC date offline), `ranked: true` | arena 580–700, 130–170 motes, 3–6 rivals at skill 0.4–0.7, 2–6 barbs, 3 min, goal 140–220, theme by hash | `dailiesDone[day]` = best score, `dailyStreak {last, count}` (consecutive UTC days) |
 | Practice | Calm / Standard / Expert presets | 1/3/6 rivals at 0.25/0.5/0.75, 1/3/6 barbs, goals 100/160/220; never ranked | `practiceDone[id]` |
 | Challenge | Lean Drift (no eject), Sprint Culture (75 s), Crowded Dish (10 rivals), Barb Garden (12 barbs), Gentle Giant (no rival absorbs), Apex Culture (absorb 8) | per-item constraints via `ejectDisabled`, `durationTicks`, `noRivalAbsorb`, goal type | `challengeDone[id]`, `challengeBest[id]` |
 
 Difficulty curve: tier 0 (Lagoon) teaches grazing alone, a single timid rival appears at stage 6; tier 1 (Amethyst) is 1–2 rivals; tier 2 (Verdant) adds 2–5 barbs; tier 3 (Cinder) has 2–3 rivals plus barbs at skill 0.45+; tier 4 (Aurora) is 3–4 rivals at 0.55–0.83 with 3–5 barbs and goals up to 297 at the mastery stage. Nothing is locked: every list is fully selectable; badges show completion. Lifetime stats (`rounds`, `goals`, `wins`, `massAbsorbed`, `cellsAbsorbed`, `splits`, `playMs`) accumulate in the save document.
 
+
 ## 6. Controls and interaction
 
-| Input | Desktop | Touch | Effect / feedback |
-|---|---|---|---|
-| Steer | pointer move over the canvas (no button needed), or Arrow keys / WASD (rebindable through StarHermit controls) nudging the target 260 units from the centroid | drag or tap anywhere on the canvas (pointer capture) | all your cells accelerate toward the world point; no cursor is drawn — the cells themselves are the feedback |
-| Split | Space or HUD **Split** | HUD **Split** (64×44 px min) | `cell-split` cue, halves fly toward the target; button disabled when illegal; caption explains a rejected press |
-| Eject | E or HUD **Eject** | HUD **Eject** | `mass-eject` cue, pellet leaves toward the target |
-| Hint | H or HUD **Hint** | HUD **Hint** | `hint-ping` cue, cyan ring for 2.6 s, one-line caption |
-| Pause / resume | Esc or P, or HUD **Pause** | HUD **Pause** | `ui-tick`, pause overlay; Esc toggles back |
-| Menus | Tab/Enter on real buttons; first control auto-focused on every screen except the HUD | tap | `ui-tick` on every button |
+Actions are declared in `starhermit.txt`; players rebind keys and pads in the runtime's Options (F1 natively). The game reads actions, never keys.
 
-Locking: steering, Split, Eject and Hint are ignored unless `inPlay()` (round active and not paused). Keyboard steering is ignored while focus is in an input. Backgrounding the tab pauses the round and suspends audio; returning resumes audio but leaves the pause overlay for the player. Frame `dt` is clamped to 250 ms and at most 8 ticks run per frame, then the backlog is dropped rather than fast-forwarded.
+| Action | Keyboard | Gamepad | Touch / mouse | Effect / feedback |
+|---|---|---|---|---|
+| Steer (`up`/`down`/`left`/`right`, group "Steering") | Arrow keys / WASD | Left stick / D-pad | the pointer over the dish (no button needed); a touch drag or tap on the dish | keys and stick set the target 260 units from the centroid in the held direction before every tick (stick magnitude scales it); a pointer move sets the target to the dish point under it, except over the HUD's Pause button and action tray |
+| `split` (group "Actions") | Space | South (A) | HUD **Split** | `cell-split` cue; button disabled when illegal; a refused press prints the reason in the caption strip |
+| `eject` | E | West (X) | HUD **Eject** | `mass-eject` cue, pellet toward the target |
+| `hint` | H | North (Y) | HUD **Hint** | `hint-ping` cue, cyan ring for 2.6 s, one-line caption |
+| `pause` | Esc / P | Start | HUD **Pause** | pauses / resumes; on menu screens it goes one screen back (results → modes) |
+| Menus | Tab / arrows / Enter | D-pad / South | tap / click | the first control of every screen is focused; the HUD never keeps focus (Space stays Split) |
+
+Steering, Split, Eject and Hint act only while the round runs unpaused on the HUD. A hidden window or tab pauses the round (pause screen) and stops the pad. The simulation advances only on the runtime's fixed steps, so a slow frame or a suspended page never fast-forwards the round.
 
 ## 7. Screens and UI flow
 
-Screens are `<section class="cd-screen …">` elements built once in `buildUI` and switched by `showScreen(name)` — exactly one is displayed at a time:
+`title` ⇄ `help`; `title` → `modes` → {`lessons` | `journey` | `daily` | `practice` | `challenge`} → `hud` ⇄ `pause` → (`hud` restart | `modes` leave); `hud` → `result` → (`hud` retry | `modes`). One screen shows at a time (`app.screen`).
 
-`title` ⇄ `help`; `title` → `modesel` → {`lessons` | `journey` | `daily` | `practice` | `challenge`} → `hud` ⇄ `pause` → (`hud` restart | `modesel` leave); `hud` → `result` → (`hud` retry | `modesel`). Two extra states live outside this map: the boot-failure alert in `index.html` and the "3D unavailable" compat panel when `WebGLRenderer` throws.
+- **Title** over the title backdrop and a light scrim: wordmark, tagline, the account line ("Offline — progress saves on this device." for guests, "Playing as <name> · progress synced / saving… / cloud sync unavailable" signed in), Play, Help & rules, Options (the runtime's menu), Invite a friend (signed in; copies the link with a toast), Sign in with StarHermit (guests; the runtime's sign-in).
+- **Mode select**, **lesson / Journey / practice / challenge lists** (name, brief or description, "mastery stage", the done mark and Journey stars), **daily setup** ("<Daily Culture — date> — reach N mass in 3 minutes. Ranked.", Begin the day). Every list button is at most 420 px wide.
+- **HUD**: objective (brief + goal) and progress ("Mass n / goal · m:ss · Rank r/n") top-left at most 70 ch wide; Pause right below it on the right; the Split / Eject / Hint tray bottom-right (64 × 44 px minimum); captions centred above the tray.
+- **Pause**: Resume, Restart round, Leave to modes, Options, the game's own toggles (Captions / text cues, Color-vision-safe palette) and a note that sound, graphics, language, controls, text size, high contrast and reduced motion are in the StarHermit Options.
+- **Results**: the vignette art (dropped under high contrast or below 420 px of height), headline, the seven-line breakdown, total and rank, achievements unlocked (with a drawn medal), the leaderboard line when signed in, Retry, Back to modes.
+- **Toast** at the bottom (at the top over pause and results).
 
-Layout: `.cd-root` is `position: fixed; inset: 0; overflow: hidden`; the canvas fills it; every screen is an absolutely positioned flex column with `overflow-y: auto`, `padding: max(16px, env(safe-area-inset-*))`, and auto margins on the first/last child so short content centres and long content (the 40-stage journey list) scrolls from the top. Menu screens carry an 82 % dark scrim; the title adds the authored backdrop under a lighter gradient; the HUD has no scrim and `pointer-events: none` except on its buttons. Above a 1600×1000 viewport, `ui-scale.js` (loaded first in `<head>`) sets `--ui-scale` (min(w/1600, h/1000), max 2.5) and every DOM layer over the canvas — all screens including the HUD, the frame-rate meter, toasts and the boot-failure notice — zooms by it, with viewport-unit lengths inside divided by it; the full-viewport canvas is not zoomed. At 1600×1000 and below the scale is exactly 1. Toasts sit at the bottom centre, except while the results or pause screen is up, when they show at the top so they never cover Retry/Back.
-
-HUD: objective + progress text top-left (`max-width: 70ch`), **Pause** top-right, the Split / Eject / Hint tray bottom-right inside the safe area, captions centred at the bottom. Nothing in the HUD may cover the player's cell, which the camera keeps centred. Desktop 1280×800, short desktop 1280×600, phone portrait 390×844 and phone landscape 844×390 are all verified by `tests/e2e.mjs`: no child above the viewport, none clipped horizontally, the last child reachable by scrolling, no text overflow in buttons or paragraphs.
+Layout: every screen is a scrim over the dish with its column centred (at most 560 px, 16 px gutters, the safe area respected); a column taller than the window scrolls with its Back / Close / Retry buttons pinned below it. Sizes follow the runtime's interface scale and text size. Verified at 960 × 540 (play scripts), 1366 × 768, phone 390 × 844 and phone landscape 844 × 390 (`tools/browser-play.mjs`).
 
 ## 8. Art direction
 
-**Palette** (from `content.js THEMES` and `css/style.css`): shell background `#071c26` / `#04131b`, text `#eafcff`, accent `#4fd8c2` (buttons at 12 % fill / 55 % border, hover 25 %), focus ring `#9bf6e4`, goal marker `#fff3a0`, hint ring `#9be8ff`.
+**Palette** (from `content.js THEMES` and `tools/ui-style.css`): shell background `#04131b`, scrim `rgba(4,19,27,0.82)`, text `#eafcff`, accent `#4fd8c2` (buttons at 12 % fill / 55 % border, hover 25 %), focus ring `#9bf6e4`, goal marker `#fff3a0`, hint ring `#9be8ff`.
 
 | Theme | bg / deep | membrane | player | motes | barb |
 |---|---|---|---|---|---|
@@ -187,185 +188,137 @@ HUD: objective + progress text top-left (`max-width: 70ch`), **Pause** top-right
 | Cinder Field | `#241016` / `#120508` | `#ff7a66` | `#7ad7f0` | `#ffb09a #ff8d75 #ffd6c8` | `#ffd23f` |
 | Aurora Veil | `#0a1a2b` / `#050d18` | `#5fb4ff` | `#f9f871` | `#a5d8ff #7cc4f5 #d0ebff` | `#ff6fd8` |
 
-The colour-vision-safe patch replaces membrane/player/barb/motes with `#0072B2 / #E69F00 / #D55E00 / #56B4E9 #F0E442 #CC79A7`. Rival hues come from the seed and are rendered at HSL(hue, 0.62, 0.55); the player is always the theme's `player` colour plus a pulsing rim on layer 2 — the only entity with a rim.
+The colour-vision-safe palette (the game's setting) replaces membrane/player/barb/motes with `#0072B2 / #E69F00 / #D55E00 / #56B4E9 #F0E442 #CC79A7`. Rival hues come from the seed at HSL(hue, 0.62, 0.55); the player's cells carry a pulsing rim in the player colour — the only entity with one.
 
-**Shape language.** Everything is round: cells are flattened spheres (`scale.z 0.42`) with a 30 %-opacity nucleus, motes and pellets are low-poly icosahedra, the dish is a circle with a 5-unit glowing rim and four faint concentric rings, the only spiky silhouette is the 9-point barb star. Menus use 10 px radii and thin accent borders.
+**Shape language.** Cells are flattened spheres (z × 0.42) with a 30 %-opacity nucleus; motes and pellets are low-segment spheres; the dish is a circle with a 5-unit glowing rim, a soft halo and four faint concentric rings; the only spiky silhouette is the 9-point extruded barb star. Menus use 10 px radii and thin accent borders.
 
-**Typography.** `'Segoe UI', system-ui, -apple-system, sans-serif`; title `clamp(1.8rem, 6vw, 3.2rem)`; buttons `clamp(0.95rem, 2.5vw, 1.1rem)`; HUD text carries a 1 px shadow for legibility over the dish.
+**Lighting and camera.** ACES tone mapping at exposure 1.05; a pale fill light from the camera's side (the browser build's hemisphere fill), a 0.3 ambient and one warm key from the upper left (intensities three.js's ÷ π); membranes are Lambert, standard or physical (clearcoat) by budget, with a WGSL fresnel edge light; motes and pellets are emissive. The key light casts shadows of motes, pellets and barbs on the floor (the floor's light hook darkens it by 42 % of the shadow); each cell lays a soft disc where its shadow falls (the engine's shadow pass leaves the translucent membranes out). With reflections the room environment (`PMREMGenerator.fromScene(new RoomEnvironment())`) lights the scene at `environmentIntensity` 0.3. The orthographic camera follows the centroid with critically damped smoothing (stiffness 6.5), zooms out with the largest cell (`46 + 28.8·r` half-height, 80–900), frames the lesson marker with the player, and shakes on absorbing a rival (2.5) and bursting (4).
 
-**Lighting and camera.** ACES tone mapping at exposure 1.05 with sRGB output; a hemisphere fill (pale lamp above, deep teal agar below), a 0.3 ambient and one warm directional key from the upper left whose PCF soft shadows fall down-right onto the dish. Membranes are `MeshStandardMaterial` (Surface detail Plain) or `MeshPhysicalMaterial` with clearcoat, a faint iridescence and sheen (Detailed); both add a view-space fresnel rim to the emissive so each cell reads as a translucent wall with a bright edge. Motes and pellets are emissive so food stands out on the dark floor; barbs are standard-lit with a red emissive. The dish floor keeps its authored colours (unlit texture); a shadow-catcher plane above it only darkens where shadows fall, and a soft additive halo lights the glass wall outside the rim. Orthographic camera follows the player centroid with critically damped smoothing (`FOLLOW_RATE 6.5`, `ZOOM_RATE 4`); view half-height `clamp(46 + radius·28.8, 80, 900)` — about 200 units at mass 20, 390 at mass 100. Shake is capped at 6 units and decays exponentially.
+**Motion.** Membranes breathe ±2 %, motes pulse ±12 %, barbs spin 0.35 rad/s, plankton drift 0.008 rad/s, the marker pulses ±8 %, the caustic shimmer drifts. Vanished entities pop into 4 (mote) or 14 (cell) soft particles from a pool bounded by the budget. The runtime's Reduced motion removes breathing, pulses, spin, drift, caustic motion and shake and caps bursts at 3.
 
-**Motion principles.** Membranes breathe ±2 %, motes pulse ±12 %, barbs spin 0.35 rad/s, decor drifts 0.008 rad/s, the marker ring pulses ±8 %. Vanished entities pop into 4 (mote) or 14 (cell) soft round particles from a 1 200-particle pool bounded by the Particles setting (Low 300 / High 1 200); a new round never pops the previous round's entities. A caustic shimmer (thin light lines focused by the dish liquid) drifts slowly across the floor when Dish shimmer is Animated. Reduced motion removes breathing, pulses, spin, drift, the caustic drift, shake and caps particle bursts at 3 while keeping event timing. High contrast raises membrane opacity to 0.95, saturates rival hues and brightens the rim and rings.
+**Graphics levels.** The runtime's Graphics options (Auto or a level) give `frame().quality` and `levelIndex`; `native/quality.ts` maps them to the browser build's presets:
 
-**Graphics.** Optional effects: key-light shadows of cells, motes, pellets and barbs (shadow box fitted to the visible part of the dish and snapped to whole texels so camera follow does not shimmer; 1024² / 2048² / 4096²), bloom limited to emissive motes, rims, marker and hint rings and specular glints (UnrealBloom, threshold 0.9), a colour grade with gentle S-curve, a little saturation, cool shadows / warm highlights and a vignette, FXAA / SMAA / MSAA anti-aliasing, image-based reflections (`PMREMGenerator` + `RoomEnvironment` as `scene.environment`), plankton particles and burst budget (per preset, below), the animated caustic shimmer, and surface detail (agar floor with a lamp-light pool, faint ghost cell walls, grain and a lit glass edge at the preset's floor-texture size, plus physical membranes on High/Ultra; Plain is the half-size gradient floor). The post chain is RenderPass → UnrealBloom → grade → OutputPass → SMAA/FXAA on a half-float target (4× MSAA target for MSAA) and is built only when bloom, grade, FXAA or SMAA is on; otherwise the renderer draws directly with the canvas MSAA. The **Graphics** panel (title screen button and pause menu, `.cd-graphics`) offers Quality (Auto (detected: …) — chosen from the StarHermit hardware level, below; Low; Balanced; High; Ultra), Render scale 50–200 % (multiplies the preset's scale: Low 0.85, Balanced/High 1, Ultra 1.25; pixel ratio = min(dpr, preset DPR cap) × scale × adaptive), one select per category (Shadows off/low/medium/high, Glow off/on, Color grade & vignette off/on, Anti-aliasing off/FXAA/SMAA/MSAA, Reflections off/on, Particles low/high, Dish shimmer static/animated, Surface detail plain/detailed; "From preset (…)" by default), Adaptive resolution (averages 90 frames; above 26 ms steps the scale down 0.1 to a minimum of 0.6, below 14 ms back up 0.05 to 1; on by default) and Show frame rate (a small `#cd-fps` readout, off by default), plus a summary line "GPU · Level N · shadows · effects · AA · W×H px" ("Level" localized in all nine locales) and a note when post-processing could not be built (the game then renders without it). Choosing a preset clears the overrides. Changes apply immediately without reload and persist as `settings.graphics` in the save document; the resolved preset is mirrored to `data-gfx-preset` on `<body>` and the canvas. Graphics settings never touch rules or hazard visibility. Presets: Low — no shadows, glow, grade, reflections, shimmer; MSAA; low particles; plain detail. Balanced — low shadows, glow, grade, FXAA, reflections, high particles, animated shimmer, detailed. High — as Balanced with medium shadows and SMAA. Ultra — high shadows, MSAA, 1.25 scale.
-
-**Hardware-level detection.** `js/gpu-level.js` (shared StarHermit copy, `window.StarHermitGpu`, loaded before `app.js`) rates the `WEBGL_debug_renderer_info` renderer on the StarHermit hardware level 0–20 (0 = Galaxy S20 / Intel UHD or weaker and every software renderer such as SwiftShader/llvmpipe, 20 = RTX 5090, each level ≈ 1.23×; laptop parts two levels below desktop; phones, tablets and ≤ 4 GB machines capped at 9). `gfx.js` maps it with `presetForLevel(level, { low: 0, balanced: 4, high: 10, ultra: 17 })`, so Auto picks Ultra on strong GPUs; adaptive resolution still steps down when slow.
-
-**Per-preset budgets** (`BUDGETS` / `budgetFor` in `js/gfx.js`; each preset holds 60 FPS on the weakest GPU Auto gives it — Low at level 0, Balanced 4, High 10, Ultra 17). Counts are tuned at the floor level and scale up within the preset on faster GPUs (`StarHermitGpu.scaleBudget`, ≤ 4×, never below the floor); the Particles tier still caps them (low: 300 bursts / 60 plankton). Every graphics change rebuilds materials, cell meshes and the dish live.
-
-| Budget | Low | Balanced | High | Ultra |
+| | Low | Balanced | High | Ultra |
 |---|---|---|---|---|
-| Device-pixel-ratio cap | 1 | 1.5 | 2 | 2 |
-| Agar floor texture (detailed; plain = half) | 512 px | 1024 px | 1024 px | 2048 px |
-| Membrane sphere segments | 16×10 | 24×16 | 28×20 | 40×28 |
-| Membrane material | Lambert | Standard | Physical (clearcoat, iridescence, sheen) | Physical |
-| Burst particles · drifting plankton | 200 · 50 | 500 · 120 | 900 · 200 | 1200 · 320 |
+| Key-light shadow map | off | 1024 | 2048 | 4096 (held to the level's size) |
+| Bloom (strength 0.45, radius 0.2, threshold 0.9) · grade | – | on | on | on |
+| Anti-aliasing | MSAA | FXAA | SMAA | MSAA |
+| Reflections (room environment) | – | on | on | on |
+| Caustic shimmer · detailed floor (lamp pool, ghost walls, glass light, grain) | – | on | on | on |
+| Floor texture (detailed; plain = half) | 512 | 1024 | 1024 | 2048 |
+| Membrane segments · material | 16×10 Lambert | 24×16 standard | 28×20 physical | 40×28 physical |
+| Burst particles · plankton (×1.64 per level above the tier's first, ≤ 4×, Particles cap 300/60 or 1200/480) | 200 · 50 | 500 · 120 | 900 · 200 | 1200 · 320 |
 
-Phones and tablets pace Auto FPS at half the display refresh rate ("Auto (half refresh rate)") and start at 16 simultaneous sounds (shared `game-options.js`).
+The grade is display-space: contrast 0.11, saturation 1.1, cool shadows / warm highlights (split 0.25–0.85), vignette 0.26 (0.38–0.9, scale 1 × 0.9). Render scale, resolution, adaptive resolution, the frame-rate limit and readout belong to the runtime.
 
-**Benchmark** (`node tools/gfx-bench.mjs cellular-drift`; hook `tests/gfx-bench.mjs` picks the preset on the Graphics screen, starts the Expert practice dish and steers the player in circles with the pointer / taps). Measured 2026-10-18 with the final gate (AMD Radeon iGPU level 2 GPU time minus the same page and preset re-recorded with every WebGL draw call skipped, percentile for percentile, projected to the preset's floor level: typical p50 ≤ 12 ms, slow p90 ≤ 14 ms; RTX 5090 CPU p90 ≤ 6 ms):
-
-- Desktop 1920×1080: PASS low (GPU p50 9.44 / p90 12.33 ms, draws skipped 10.06 / 12.02 → typical 0.00, slow 0.47 at level 0; CPU p90 0.70 ms); PASS balanced (GPU p50 12.47 / p90 13.61 ms, draws skipped 11.26 / 15.51 → typical 0.80, slow 0.00 at level 4; CPU p90 0.70 ms); PASS high (GPU p50 14.88 / p90 16.06 ms, draws skipped 7.00 / 12.04 → typical 1.50, slow 0.77 at level 10; CPU p90 0.90 ms); PASS ultra (GPU p50 25.65 / p90 31.05 ms, draws skipped 11.46 / 15.06 → typical 0.64, slow 0.72 at level 17; CPU p90 0.80 ms).
-- Mobile 390×844 @3×: PASS low (GPU p50 14.27 / p90 16.84 ms, draws skipped 14.29 / 16.85 → typical 0.00, slow 0.00 at level 0; CPU p90 0.60 ms); PASS balanced (GPU p50 14.14 / p90 16.89 ms, draws skipped 14.45 / 16.88 → typical 0.00, slow 0.01 at level 4; CPU p90 0.70 ms).
-
-**Visual assets the design calls for**
-
-| Asset | Purpose |
-|---|---|
-| `coverart.png` | Platform cover: the dish from above, golden player cell centred, rival hues, barbs, motes |
-| `assets/title-backdrop.webp` | Title screen key art under the scrim: out-of-focus teal membranes, empty centre for the wordmark |
-| `assets/results-vignette.webp` | Results overlay hero: one fully grown golden cell drawing motes in |
-| `icon.png`, `favicon.svg` | Launcher icon and tab icon |
-
-No mesh assets: cells, motes, barbs and the dish are procedural geometry by design.
+**Visual assets**: `coverart.png` / `cover.jpg` (platform cover), `assets/title-backdrop.webp` (title, under the scrim; a plain scrim under high contrast), `assets/results-vignette.webp` (results hero, rounded corners). No mesh assets: everything else is procedural.
 
 ## 9. Audio direction
 
-**Mix.** Four independent gain buses — `music` 0.6, `effects` 0.9, `ambience` 0.5, `voice` 0.8 — under one master; "Mute all" zeroes every bus. WebAudio unlocks on the first pointerdown/keydown; before that, and while muted, events still emit captions. Sampled clips are lazily fetched and decoded on first use; until a clip is ready (or if it 404s) the synth version plays, so every cue exists with no assets at all. Pitch variants (±6 %) come from an LCG seeded by the round seed.
+**Mix.** The runtime's buses: music (the pad, at the old 60 % bus level), effects (event clips at 90 %, ambience loop at 0.8 × 50 %), interface (the menu tick). Volumes, mute and the voice limit are the runtime's Options. In browsers sound starts after the first press. Clips load one at a time once the mixer runs.
 
-**Music.** Procedural minor-pentatonic pad over G3 stepping every 420 ms; note length and a low triangle drone scale with `intensity`, which `afterTick` sets to 1 while the hint says "flee" and to `0.2 + 0.5·(mass/goal)` otherwise. Music stops while the tab is hidden.
+**Music.** A minor-pentatonic pad over G3 stepping every 420 ms (degree `(3s + s>>2) mod 7`, an octave down on steps 4–7 of 8), rendered once into clips (sine + 2.01× overtone, 12 ms attack, exponential decay) in a calm (1.46 s) and a tense (0.9 s) length; gain `0.07 + 0.05·intensity`; a triangle drone at G2 every other step above intensity 0.45. Intensity is 1 while the hint says flee, else `0.2 + 0.5·mass/goal`, updated every 15 ticks. The pad stops while the window is hidden.
 
-**Ambience.** A low-passed noise bed (240 Hz, 0.07 Hz LFO) starts at unlock; the authored 12 s loop `ambience-medium.opus` cross-fades in over 2.5 s once decoded, and the bed drops to 8 %.
+**Ambience.** `ambience-medium.opus`, a 12 s loop, from the first unlocked frame.
 
-**SFX event table** (source of `sfx/manifest.txt`; every id is an `audio.play` name in `js/audio.js`):
+**SFX event table** (`sfx/manifest.txt`; every id is a `native/audio.ts` event):
 
-| Event id | File | Sound | Usage context |
-|---|---|---|---|
-| `ui` | `ui-tick.opus` | short soft plastic tick | every menu/back button, Pause, Resume |
-| `absorb` | `mote-absorb.opus` | wet plip into jelly | player's `motes` stat rose this tick |
-| `pellet` | `pellet-gulp.opus` | quick underwater gulp | player's `pellets` stat rose |
-| `absorbBig` | `cell-absorb-big.opus` | deep membrane thump + squelch | player absorbed a rival cell; shake 2.5 |
-| `split` | `cell-split.opus` | wet elastic tear | player split executed |
-| `eject` | `mass-eject.opus` | short wet spurt | player ejected pellets |
-| `burst` | `barb-burst.opus` | sharp membrane crack | a player cell burst on a barb; shake 4 |
-| `danger` | `danger-ping.opus` | low sonar ping | hint action is `flee`; at most one per 2.2 s |
-| `merge` | `cell-merge.opus` | two blobs fusing, low plop | player's split halves recombined |
-| `hint` | `hint-ping.opus` | glassy ping with watery tail | Hint pressed, ring shown |
-| `go` | `round-start-go.opus` | bright rising chime | every round start, Retry, Restart |
-| `win` | `goal-win.opus` | four-note ascending fanfare | results for `goal-complete` / `last-cell` |
-| `lose` | `round-lose.opus` | three descending tones | results for `eliminated` / `constraint-violated` / `surrender` |
-| `timeup` | `time-up.opus` | three flat buzzer beeps | results for `time-up` |
-| `ambience` | `ambience-medium.opus` | quiet petri-dish fluid loop | ambience bus loop from unlock |
-| `countdown` | `countdown-beep.opus` | neutral countdown beep | bound; no trigger yet (intent) |
-| `rewind` | `time-rewind.opus` | reverse whoosh | bound; no trigger yet (intent) |
-| `achievement` | `achievement-unlock.opus` | sparkling three-note chime | bound; no trigger yet (intent) |
+| Event id | File | Usage |
+|---|---|---|
+| `ui` | `ui-tick.opus` | every menu button, Pause, Resume |
+| `absorb` | `mote-absorb.opus` | player's `motes` stat rose this tick |
+| `pellet` | `pellet-gulp.opus` | player's `pellets` stat rose |
+| `absorbBig` | `cell-absorb-big.opus` | player absorbed a rival cell; shake 2.5 |
+| `split` | `cell-split.opus` | player split executed |
+| `eject` | `mass-eject.opus` | player ejected |
+| `burst` | `barb-burst.opus` | a player cell burst on a barb; shake 4 |
+| `danger` | `danger-ping.opus` | hint action is flee; at most one per 66 ticks (2.2 s) |
+| `merge` | `cell-merge.opus` | split halves recombined |
+| `hint` | `hint-ping.opus` | Hint pressed |
+| `go` | `round-start-go.opus` | every round start, Retry, Restart |
+| `win` / `lose` / `timeup` | `goal-win.opus` / `round-lose.opus` / `time-up.opus` | results by terminal reason |
+| `achievement` | `achievement-unlock.opus` | a local achievement unlocked |
+| `countdown`, `rewind` | `countdown-beep.opus`, `time-rewind.opus` | loaded; no trigger yet (intent) |
 
-Captions: with "Captions / text cues" on, every played event writes its text ("absorbed a rival cell", "cells recombined", …) to the `aria-live` caption strip for 1.6 s. The voice bus exists but nothing plays on it.
+Pitch variants (±6 %) come from an LCG seeded by the round seed. Captions: with Captions on (pause screen), each event's text ("absorbed a mote", "cells recombined", …, translated) shows in the caption strip for 1.6 s and is announced to screen readers.
 
 ## 10. Localization
 
-Nine locales ship: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**.
-
-- **Strings.** Code and content are authored in English and the English text is the lookup key. `js/strings.js` holds one row per key with es-419, de-DE, fr-FR, pt-BR and it-IT; en-GB, es-ES and fr-CA list only their differences. `tr()` (`js/i18n.js`) falls back regional → parent → English and fills `{name}` placeholders. Every player-facing string goes through it: title, mode select, lesson/journey/practice/challenge lists (names and briefs), daily setup, HUD objective and progress, hint captions and refused-action reasons, pause and settings rows, results (headline, breakdown, total, achievements), help (with the effective key labels), account line and the boot-failure/compat messages. The Graphics panel (`js/gfx-i18n.js`) and StarHermit strings (`js/platform-strings.js`) use the same locale. "Cellular Drift" and the rival cells' names are not translated; numbers stay locale-independent.
-- **Language setting.** Graphics settings → **Language → Game language** (rendered by `game-options.js` inside the Graphics panel, opened from the title and from the pause menu) offers **Automatic — <resolved language>** plus the nine locales by native name, with a status line (Saved to account / Saved on this device / Account sync unavailable). It is the only selector.
-- **Resolution** (`sh-language.js`): explicit game choice → for Automatic, the StarHermit account's `preferredLanguage` (`GET /api/v1/me/language`, signed in only) → `navigator.languages` → en-US, each mapped to the nearest shipped locale (`es-MX → es-419`, `en-AU → en-GB`, `fr → fr-FR`, `pt-PT → pt-BR`). The choice (`auto` or a locale) is stored per player in `localStorage['cellular-drift.language.<user|guest>']` and, when signed in, in the per-player settings key `ui.language` as `{ choice }`; a failed settings read never overwrites it and the game never writes the platform preference. `?lang=<tag>` forces a locale for the page load (QA links) and hides the selector.
-- **Live switching.** The UI is built once; its text nodes are registered as live text and rewritten in place when `cd-language` fires, together with the account line, HUD, Graphics panel values and progress marks. The round in play, the simulation and the scene are untouched.
-- `tests/i18n.test.mjs` collects every key from the code, `index.html` and the content and fails when a locale lacks one or a translation drops a placeholder. Layout tolerates expansion: buttons wrap, the objective wraps at 70ch, list buttons are `min(420px, 100%)` wide, and the e2e layout probe fails on any overflowing text.
+Nine locales: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**. The locale is the runtime's interface language (`preferences().language`: the player's choice in Options › Language, else the account's preferred language or the device's), mapped to the nearest shipped locale (`es-MX → es-419`, `en-AU → en-GB`, `pt-PT → pt-BR`), and follows changes live (the UI is rebuilt every frame). `js/strings.js` holds one row per English key with es-419, de-DE, fr-FR, pt-BR and it-IT; en-GB, es-ES and fr-CA list only their differences; `T()` falls back regional → parent → English and fills `{name}` placeholders. Every player-facing string goes through it, including content names and briefs, hint texts, refused-action reasons, captions, account, invite and leaderboard lines. "Cellular Drift" and rival names stay as they are. `tests/i18n.test.mjs` collects every key from `native/*.ts` (`T(…)`, `N(…)`), the captions, the content and the rules' hints, and fails when a locale lacks one or a translation drops a placeholder.
 
 ## 11. Accessibility
 
-- **Keyboard-only path.** Every screen auto-focuses its first control; Tab/Enter operate real `<button>`/`<input>` elements; in play, Arrow/WASD steer, Space splits, E ejects, H hints, Esc/P pauses. The HUD deliberately does not take focus so Space is never swallowed by a button.
-- **Focus.** `:focus-visible` shows a 2 px `#9bf6e4` outline with 2 px offset on buttons and inputs.
-- **Announcements.** The HUD objective is `role="status" aria-live="polite"`; captions and the results section are `aria-live="polite"`; the boot-failure box is `role="alert"`.
-- **Captions.** Text cues for all meaningful audio (off by default, toggle in Pause); invalid actions and hints always print regardless of the setting.
-- **Contrast.** `#eafcff` on `#04131b` for all text; High contrast mode raises membrane and nucleus opacity, rim brightness and drops decorative backdrops; the colour-vision-safe palette swaps to the Okabe–Ito set, and ownership is also shown by the rim (player only) and shape (barb star).
-- **Reduced motion.** Removes breathing, pulses, spin, drift and shake, caps particle bursts; event timing unchanged.
-- **Targets.** Action buttons are at least 64×44 CSS px with 8 px gaps; list buttons are 44+ px tall; the tray sits inside `env(safe-area-inset-*)`.
-- **Failure states.** WebGL missing shows an explanation instead of a blank page; a blocked module shows the boot-failure alert with a Reload button.
+- **Keyboard and pad**: every screen focuses its first control; Tab / arrows / Enter and the pad navigate; in play, steering, Split, Eject, Hint and Pause are actions; the HUD drops focus so Space stays Split.
+- **The runtime's accessibility options** apply: interface and text size (layouts measure text and follow the scale), high contrast (denser scrims, brighter borders and ink, opaque membranes, stronger rings, no decorative art), reduced motion (see §8).
+- **Game options**: Captions / text cues, Color-vision-safe palette (Okabe–Ito). Ownership also shows by the rim (player only) and shape (barb star).
+- **Announcements**: toasts, hints, refused actions and captions go to `ui.announce`.
+- **Targets**: action buttons ≥ 64 × 44 px with 8 px gaps; list buttons ≥ 44 px tall; the tray sits inside the safe area.
 
 ## 12. StarHermit integration
 
-Manifest `starhermit.txt`: `name=Cellular Drift`, `launch=index.html`, `owner=…`, `cover=…`, `server=score-script.js`, plus one `control.<action>=<codes> | <label>` line per keyboard action. `index.html` loads `starhermit-sdk.js` (canonical client, shipped unchanged) and calls `StarHermit.init()` before any game script; `js/platform.js` is the game's adapter over `window.StarHermit`. Without a token the game makes no network requests and plays fully offline.
-
-| Platform feature (wiki.starhermit.com conventions) | Used | How |
-|---|---|---|
-| Launch manifest and cover | yes | `starhermit.txt`, cover image |
-| Launch token / renewal | yes | the SDK reads `#game_token=` (library launch) or `#access_token=` (sign-in return), strips it, takes the slug from `game_scope` (never hard-coded) and renews it via `POST /api/v1/games/{slug}/launch-token`. If renewal is refused a toast says the player is signed out, the sign-in button returns and play continues locally |
-| Sign in | yes | on `*.starhermit.com` without a token the title shows **Sign in with StarHermit**; hidden when signed in and when running locally |
-| Profile / account line | yes | `StarHermit.profile()` nickname (`Player <id>` fallback, never `/api/v1/me`); the title shows "Playing as <nickname> · sync status", offline it says progress stays on this device |
-| Cloud save | yes | the checksummed save doc mirrors to the slot `/api/v1/me/cloud-saves/game:<slug>` (SDK `loadSave`/`saveJSON`/`flushSave(true)`): remote wins on boot (validated through `CDStore.loadRaw`, awaited up to 3 s before the UI is built), saves debounce 2 s and flush on `pagehide`/hidden. localStorage stays the offline cache. Writes after a load are conditional: when another device saved first the SDK refuses the write (`saveconflict`), the adapter reloads the cloud copy and `CDStore.mergeProgress` keeps the better of both sides — higher journey stars and bests, challenge bests and daily scores, every completed lesson, practice and challenge, the earliest unlock of each achievement, the larger of each lifetime stat, the later daily streak — while this device keeps its settings and the round in play; the merge is saved again |
-| Language | yes | Automatic follows `GET /api/v1/me/language`; the explicit choice syncs to the settings key `ui.language` (§10) |
-| Reports | yes | Graphics settings → **Report a problem** (signed in only, from `game-options.js`) files a bug report through `StarHermit.reportBug` with a small non-personal `context.json`; uncaught errors are filed as crash reports through `StarHermit.captureCrashes` (at most one per message and three per page load) |
-| Settings KV | yes | volumes, mute, captions, graphics, theme, reduced motion, high contrast, colour-vision palette and large text are patched to the game's settings KV on change (debounced) and applied at boot, where the platform value wins |
-| Controls | yes | steer up/down/left/right, split, eject, hint and pause are declared in `starhermit.txt`; boot resolves `StarHermit.loadBindings()`, keydown/keyup route by `event.code` through the bindings, and Help shows the effective keys |
-| Invite link | yes | signed in, the title shows **Invite a friend**, copying `StarHermit.inviteLink()` with a confirmation toast |
-| Own-server routes | signed in only | `server.js` is the local Node server: `GET /api/v1/time` (server-adjusted daily, 2.5 s abort) is only probed when signed in, local clock otherwise; its legacy `/api/v1/scores` routes are no longer called |
-| Leaderboard | signed in only | every finished round outside Learn posts its total through `StarHermit.submitScores` (a practice session whose `score-script.js` posts it to the `high-score` board: integer, higher is better, 0–200,000); the results screen shows "Leaderboard rank: #N" (or posted / not posted). Standalone play posts nothing and shows no leaderboard line; every round still goes to the local board |
-| Platform achievements | no | achievements stay local (six keys in the save doc) |
-| Sessions, matchmaking, session invites, chat, replays, realtime, voice | no | single-player only; rivals are local AI |
-
-New platform UI strings (sign in, invite, toasts, leaderboard line) ship in all nine locales (`js/platform-strings.js`, following the game language).
+| Feature | How |
+|---|---|
+| Manifest, cover, loader | `starhermit.txt` (engine pin 1.15.0, minor 17, capabilities platform, storage, clipboard); `index.html` + `starhermit-files.json` from `npm run package` |
+| Player | `player()`; signing in and out is the runtime's (Sign in with StarHermit calls `requestSignIn`); a session ending shows a toast |
+| Cloud save | `saves`: `{ v: 1, progress }`, saved at every round's end; a conflict merges both devices' progress (`CDStore.mergeProgress`: better stars and bests, every done mark, larger lifetime counters, earliest achievements, later daily streak); a save another device wrote is merged in |
+| Browser-build migration | the JS SDK's slot `game:<slug>` (checksummed `{ sum, payload }` document) shows as foreign: its progress is merged and replaced once (`replaceForeign`), its captions / palette / theme kept where the account has none; the old per-player settings keys are imported the same way and removed (`settings.legacyKeys`, `removeLegacy`) |
+| Game settings | `settings` (game.captions, game.cvdPalette, game.theme), synced with the account |
+| Options | volumes, mute, voice limit, graphics level, frame rate, language, controls, accessibility: the runtime's menu (Options buttons call `openMenu`) |
+| Platform clock | the daily's day from `serverNow()` (read at start and on player change), the device's UTC date while unknown |
+| Leaderboard | signed in, every finished round outside Learn posts its total through `score-script.js` (a practice session whose socket sends `{ type: 'result', scores: { 'high-score': total } }`); the results show posting / rank #N / posted / not posted |
+| Invite | signed in, Invite a friend copies `inviteLink()` with the clipboard capability |
+| Device round board | every round goes to `cellulardrift.leaderboards.v1` in device storage (newest 200) |
+| Achievements | local (six keys in the progress); no platform achievements |
+| Sessions, matchmaking, chat, replays, realtime, voice | not used: single player |
 
 ## 13. Technical architecture
 
-- **Boot** (`app.js boot`): clear body → create canvas → `createRenderer` (compat panel on throw) → `createAudio(settings)` → `createPlatform().init()` (signed in: profile, cloud save and settings KV, then server time) → `loadBindings()` → build every screen → apply presentation settings (including `renderer.setGraphics(settings.graphics)`, re-applied only when the graphics JSON changes) → wire input → `requestAnimationFrame(frame)` → `data-cd-booted` clears the watchdog.
-- **Loop** (`frame`): accumulate `dt·1000` ms; while ≥ 33.3 ms and fewer than 8 steps: `R.step`, `renderer.syncState`, `afterTick` (stat-diff audio, intensity, danger ping); then `renderer.draw(alpha, dt, focus, 'p0')`, `updateHUD`, and `showResults` once on terminal.
-- **Rules isolation.** `rules.js` and `content.js` are UMD and DOM-free; Node tests `require`/import them directly. Rendering only reads snapshots; the only mutation path is `applyCommand`.
-- **Replay/determinism.** `serialize`/`deserialize` round-trip the full state including `rngState` and the duplicate-id ring; `stateHash` is the verification key. `tests/rules-regression.mjs` proves two seeded runs with identical commands hash identically.
-- **Persistence** (`store.js`): key `cellulardrift.save.v1` holds `{sum, payload}` where `sum` is FNV-1a of the payload; a checksum mismatch or a newer `v` yields a fresh document; a memory fallback keeps the session working without `localStorage`. Boards live under `cellulardrift.leaderboards.v1`.
-- **Renderer budgets.** Pooled cell views per entity id (max 16 cells × up to 11 players), instanced motes (420) and pellets (160), one `Points` for decor and one for FX; environment, decor and barbs rebuilt when a new round starts, the arena radius changes, or theme/contrast/graphics settings change. Pixel ratio is min(dpr, 2) × preset/render scale × adaptive scale; the post chain is rebuilt when its key (effects, size, ratio) changes. `webglcontextlost` is intercepted (`preventDefault`); no automatic rebuild is attempted.
-- **Server.** Zero-dependency `node:http`; `PORT` env (default 8080, `0` = ephemeral, which the e2e uses); MIME for html/js/css/json/svg/png/webp/ico/opus; binary responses go out as Buffers.
-- **e2e driving.** `tests/e2e.mjs` imports `server.js`, launches system Chrome via `playwright-core`, and only clicks visible controls; `window.CDApp.debug()` is a read-only probe used to assert rules-vs-render agreement (player colour pixels at the projected centroid) and simulation liveness.
+- **Boot** (`onStart`): fixed rate 30 Hz, styles, platform (save, foreign migration, settings, invite, server time), presentation settings, graphics look, audio clip queue, art, title.
+- **Loop**: `onFixedUpdate` (one tick while the round runs unpaused on the HUD: stick/keys steering → `R.step` → `render.syncState` → `afterTick`, results on terminal); `onUpdate` (look per graphics level, audio, timers, HUD focus); `onRender` (screens, then the dish with the interpolation alpha).
+- **Rules isolation**: `js/rules.js` and `js/content.js` are unchanged UMD, loaded with `loadClassic`; the only mutation path is `applyCommand`; render reads snapshots.
+- **Determinism**: same seed and commands give the same `stateHash` (`tests/rules-regression.mjs`); play scripts reproduce the bot's planned scores exactly.
 
 ## 14. Testing and acceptance criteria
 
-`npm test` runs `tests/gfx.test.mjs` (hardware level → preset on sample GPUs — SwiftShader/Radeon Graphics/UHD → Low, Iris Xe → Balanced, GTX 1070 → High, RTX 4080/5090 → Ultra — including the phone cap, the per-preset budget table and its level scaling, Auto/explicit preset resolution, overrides and invalid tiers, render scale clamped to 50–200 %, choosing a preset clears overrides, every preset defines every category, every locale has every panel string) then `tests/platform.test.mjs` (the adapter over the SDK with a stubbed fetch and launch fragment: token claims, nickname, cloud save round-trip on `game:<slug>`, settings patch, bindings, invite link; standalone makes zero fetches; against a stub that enforces conditional writes, a save that loses to another device reloads the newer save for merging and unblocks writes; the progress merge keeps the better of both devices) and `tests/i18n.test.mjs` (every key translated in every locale with its placeholders; the locale follows `sh-language.js` and switches live), and then `tests/rules-regression.mjs`, which verifies: identical seeded command streams give identical `stateHash`; a duplicate command id is rejected after serialize/deserialize; the Gentle Giant constraint ends the round on a rival absorb and adds prey mass exactly once; every lesson, journey stage, practice preset, challenge and today's daily passes `validateContent` (bounds, a hint-driven bot finishes within the tick cap, no elimination without rivals, no NaN).
+`npm test` runs `tests/i18n.test.mjs`, `tests/migrate.test.mjs` (foreign save read and merged, corrupt / future refused, the engine save round trip, the two-device merge, settings kept or dropped), `tests/rules-regression.mjs` (determinism, duplicate rejection, the constraint rule, all content validated), then `tests/native.mjs`: the web index matches the files, `tsc` (strict, with the runtime's declarations), `starhermit check .` with no warnings, and the play scripts as signed-out render checks:
 
-`npm run test:e2e` (`tests/e2e.mjs`, ~5 min) verifies, on desktop 1280×800, 1280×600, phone portrait 390×844 @3x touch and phone landscape 844×390 @3x touch: every `index.html` asset reference shares one version tag and is served with `no-cache` + ETag → 304; blocking `render.js` produces the boot-failure alert; Auto resolves to Low on the software GPU; the Graphics panel (from the title) lays out, switches Low → High (checked via `data-gfx-preset` and the summary), a Glow override removes glow from the summary, the preset and override survive a reload, choosing Ultra clears the override, desktop plays Practice "Calm" at Ultra and finds the player cell rendered, Esc closes the panel and Auto restores Low; the Graphics panel opens from the pause menu and Back returns there; title, help, mode select, all five lists (journey ≥ 20 items and wheel-scrollable to the end), HUD, pause and results have no layout defects; Practice "Calm" renders the player cell in the theme colour at the rules-reported position and the tick counter advances ≥ 15 per second; pointer, touch and ArrowLeft steering move the centroid; Space/E at start mass are rejected without errors and Hint produces a caption; pause stops the tick counter, sliders and checkboxes work, Esc toggles, Restart resets, Leave ends the session; Lesson 1 is played to `goal-complete` through the real pointer, the results headline and total appear, Retry starts a new round, the lesson shows "done"; Journey, Daily and Challenge rounds start and render; content validation passes in the browser; on desktop and phone portrait, signed in through a launch token against a stubbed StarHermit API (`tests/starhermit-e2e.mjs`) whose account prefers fr-CA, the title reads "Jouer", Practice starts from "Entraînement" and is paused, Graphics shows "Automatique — Français (Canada)", choosing Italiano re-renders the panel, PUTs `ui.language` and shows "Salvato nell’account", Report a problem posts a bug report, the pause menu and HUD read Italian with the tick unchanged, and Automatic is restored; zero console errors, warnings, failed requests or HTTP ≥ 400.
+- `learn-lessons.play` — Drift to the marker, Graze to 60 (planned score expected), results, done marks.
+- `learn-actions.play` — Eject (E presses) and Divide (Space) lessons to their planned scores, Retry, pause, Leave.
+- `journey-stage.play` — stage 1 to 80 mass inside par, the list shows "done ★ ★ ★".
+- `practice-pause.play` — Calm: hint caption, refused split, pause options, palette toggle, Resume, Restart, Leave, Help.
+- `daily-challenge.play` — the daily started, paused, left; Lean Drift's refused eject.
 
-QA bar (agents/qa.md) as checkable statements: (1) Lesson 1's brief tells a new player how to move and what to reach; each lesson brief names its new mechanic; Hint is available in every round. (2) Every feature exposed by the UI is exercised by clicks in `tests/e2e.mjs`. (3) No console error or warning occurs during the e2e run. (4) No text or control is cut off at any of the four viewports. (5) Platform features go through `starhermit-sdk.js`; time sync and score submission use the own-server routes only when signed in.
+The scripts are written by `node tools/gen-plays.mjs` from `tools/plan.mjs` (a keyboard bot over the rules that simulates the play-script timing). `npm run test:browser` (`tools/browser-play.mjs`) plays the packaged loader in headless Chrome at desktop, phone and phone landscape, by keys and taps, failing on console errors or warnings or the runtime's error screen.
 
 ## 15. Asset inventory
 
-| Path | Purpose | Source | Status |
-|---|---|---|---|
-| `coverart.png` (1200×675, 256-colour PNG, 203 KB) | platform cover | FLUX.2 klein, seed 9701, 1200×688 cropped | generated in this pass (replaced generic placeholder) |
-| `assets/title-backdrop.webp` (1536×864, 18 KB) | title screen backdrop | FLUX.2 klein, seed 9702 | generated in this pass, wired in `css/style.css` |
-| `assets/results-vignette.webp` (768×432, 13 KB) | results overlay hero | FLUX.2 klein, seed 9703 | generated in this pass, wired in `app.js showResults` |
-| `icon.png` (256×256), `favicon.svg` | launcher / tab icons | authored earlier | shipped |
-| `sfx/ui-tick.opus` … `sfx/achievement-unlock.opus` (15 clips) | event SFX, see §9 | MOSS-SoundEffect v2, 100 steps | shipped |
-| `sfx/cell-merge.opus`, `sfx/hint-ping.opus` | merge and hint cues | MOSS-SoundEffect v2, 100 steps | generated in this pass, wired |
-| `sfx/ambience-medium.opus` (12 s loop) | ambience bed | MOSS-SoundEffect v2, 100 steps | generated in this pass, wired |
-| `sfx/manifest.txt` / `manifest.json` / `manifest.md` | canonical table / generator input / generated table | — | shipped |
-| 3D models, character animation | — | — | none by design (procedural geometry, no humanoid) |
+| Path | Purpose | Source |
+|---|---|---|
+| `coverart.png`, `cover.jpg` | platform cover | FLUX.2 klein, seed 9701 |
+| `assets/title-backdrop.webp` | title backdrop | FLUX.2 klein, seed 9702 |
+| `assets/results-vignette.webp` | results hero | FLUX.2 klein, seed 9703 |
+| `icon.png` | launcher icon | authored |
+| `sfx/*.opus` (18 clips) | event SFX and ambience, see §9 | MOSS-SoundEffect v2 |
+| `assets/ui-style.json` | UI styles | `npm run css` from `tools/ui-style.css` |
 
 ## 16. Known limitations
 
-- `countdown` and `rewind` clips are bound in `audio.js` but no code path triggers them; the `achievement` clip now plays on local unlocks.
-- No in-game screen lists leaderboard entries; the results screen shows only the player's own rank, and `score-script.js` only range-checks the submitted total.
-- Settings `theme`, `largeText`, `leftHanded`, `haptics`, `boardMirror` and `confirmActions` are persisted with defaults but have no UI and (except `theme`) no effect.
-- Graphics settings are part of the cloud-saved document, so a preset chosen on one device follows the account to others.
-- The `voice` bus and its slider control nothing audible.
-- `surrender` exists in the rules but has no control; Leave to modes simply discards the round.
+- `countdown` and `rewind` clips are loaded but no code path triggers them.
+- No in-game screen lists leaderboard entries; the results show only the player's own rank; `score-script.js` only range-checks the total.
+- The theme setting has no UI (rounds use their content's theme).
+- `surrender` exists in the rules but has no control; Leave to modes discards the round.
 - Lesson 3's brief mentions "the marker cell"; the goal is simply to eject 5 pellets and no target cell is drawn.
-- Practice sets `allowRewind` but there is no rewind/undo.
-- A lost WebGL context is not rebuilt; reload is required.
-- The daily uses server time when `/api/v1/time` answers; on static hosting it silently uses the device clock.
+- Practice sets `allowRewind` but there is no rewind.
 - Rival AI evaluates only the first 40 motes and its largest cell; it never ejects.
+- Lesson 1's objective repeats "Move to the glowing marker." (the brief already ends with it).
+- Membrane iridescence and sheen (three.js physical material) are not drawn; cells' shadows are soft discs, not the key light's shadow map (the engine leaves transparent materials out of shadow maps).
+- Progress a guest kept in the browser build's `localStorage` cannot migrate (only the account's cloud save does).
+- The leftHanded, haptics, boardMirror and confirmActions settings of the browser build (never wired) and its own graphics, sound and language panels are gone; the runtime's Options replace the latter.
 
 ### Design intent not yet implemented
 
 1. A 3-2-1 countdown before ranked (daily) rounds using the `countdown` cue.
 2. Practice rewind (5 s state snapshot ring) using the `rewind` cue.
-3. Achievements: first lesson set complete, first split-kill, 7-day daily streak, all mastery stages, 1 000 lifetime cells absorbed — unlocked idempotently with the `achievement` cue.
-4. A daily leaderboard screen reading `/api/v1/scores?content=<daily id>` with the store's tie-break order, and a friends filter once identity is wired.
+3. Further achievements: first split-kill, 7-day daily streak, all mastery stages, 1 000 lifetime cells absorbed.
+4. A daily leaderboard screen with the store's tie-break order, and a friends filter.
 5. A pause-menu control for the theme.
-
-## Browser interference
-
-`browser-guard.js` (loaded from `index.html`) suppresses browser UI that gets in the way of play: the right-click context menu, the iOS long-press callout, copy / cut / paste, and page text selection. Text fields (inputs, textareas, selects, contenteditable) keep normal selection, context menu and clipboard behaviour.
-
-
-## Sound and frame-rate options
-
-The options panel includes Sound controls for master, music, effects and UI volume, a mute that preserves volume levels, and an Auto or manual concurrent-sound limit (1–64). Changes apply immediately with perceptual volume curves. A shared allocator bounds Web Audio and media playback, including loops and scheduled sources. Graphics includes Auto display refresh or a custom maximum frame rate from 1–1000 FPS; rendering is paced independently of simulation and input. Preferences persist locally, with FPS stored per detected GPU, and reconcile with Starhermit settings when signed in. The controls support keyboard and touch input and the supported English, Spanish, German, French, Portuguese and Italian locales.
