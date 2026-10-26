@@ -18,7 +18,8 @@ function send(res, code, body, type) {
 const server = http.createServer((req, res) => {
   const url = req.url;
   if (url === '/api/v1/time') {
-    return send(res, 200, JSON.stringify({ now: Date.now() }), 'application/json');
+    const now = Date.now(); // the platform's clock shape (serverNow) plus the browser build's `now`
+    return send(res, 200, JSON.stringify({ now, serverTime: now, serverTimeIso: new Date(now).toISOString() }), 'application/json');
   }
   if (url.startsWith('/api/v1/scores')) {
     if (req.method === 'POST') {

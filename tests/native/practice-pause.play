@@ -1,0 +1,128 @@
+# Practice: Calm from the practice list, a few seconds of the rules bot's
+# grazing; H shows the hint (its caption), Space with a small cell is
+# refused with the reason; Escape pauses: the pause screen's own options
+# (captions, the colour-vision-safe palette) and the note on the
+# StarHermit Options, Resume, Restart round, Leave to modes; then Escape back
+# to the title, Help & rules and Close.
+until 300 Play
+frames 30
+click Play
+until 60 Choose a mode
+frames 10
+click Practice
+until 60 Calm
+frames 10
+save practice
+click Calm
+until 30 Reach 100 mass
+# plan calm (practice): running at tick 150, mass 27, score 51
+hold ArrowLeft
+hold ArrowUp
+frames 11
+release ArrowLeft
+hold ArrowRight
+frames 20
+release ArrowRight
+frames 7
+hold ArrowLeft
+frames 1
+release ArrowUp
+hold ArrowDown
+frames 1
+release ArrowLeft
+frames 1
+hold ArrowRight
+frames 1
+release ArrowDown
+frames 1
+hold ArrowUp
+release ArrowRight
+frames 1
+hold ArrowLeft
+release ArrowUp
+release ArrowLeft
+hold ArrowRight
+hold ArrowDown
+frames 9
+release ArrowDown
+frames 1
+hold ArrowDown
+frames 2
+release ArrowDown
+frames 4
+hold ArrowUp
+frames 3
+release ArrowRight
+frames 1
+hold ArrowLeft
+release ArrowUp
+frames 1
+hold ArrowDown
+frames 3
+release ArrowLeft
+frames 1
+release ArrowDown
+hold ArrowRight
+frames 1
+hold ArrowUp
+frames 2
+release ArrowRight
+frames 1
+hold ArrowLeft
+frames 1
+release ArrowUp
+hold ArrowDown
+release ArrowLeft
+frames 3
+hold ArrowRight
+frames 1
+release ArrowRight
+frames 1
+hold ArrowLeft
+frames 6
+release ArrowDown
+release ArrowLeft
+# hint: Graze on nutrient motes to grow.
+frames 5
+key KeyH 2
+until 10 Graze on nutrient motes to grow.
+save practice-hint
+key Space 2
+until 10 Cannot split
+expect your cells are too small
+frames 5
+key Escape 2
+until 30 Paused
+frames 10
+expect Captions / text cues
+expect StarHermit Options
+save pause
+click Color-vision-safe palette
+frames 30
+save pause-cvd
+click Color-vision-safe palette
+frames 10
+click Resume
+until 30 Reach 100 mass
+frames 30
+key Escape 2
+until 30 Paused
+frames 10
+click Restart round
+until 30 Mass 20 / 100
+frames 30
+key Escape 2
+until 30 Paused
+frames 10
+click Leave to modes
+until 60 Choose a mode
+frames 10
+key Escape 2
+until 60 Help & rules
+frames 10
+click Help & rules
+until 60 Touch: drag or tap
+frames 10
+save help
+click Close
+until 60 Play

@@ -1,9 +1,24 @@
 name=Cellular Drift
 description=Guide a growing cell through a petri dish, collecting nutrients and outmaneuvering hungry rivals and hazards.
-launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
 cover=cover.jpg
 server=score-script.js
+
+# StarHermit engine script game: one package, played natively by the
+# StarHermit client and in browsers by the engine's web runtime. Browsers open
+# launch=index.html, the loader `npm run package` writes (it pins the engine
+# on wiki.starhermit.com by hash; never edit it). Re-run `npm run package`
+# after every change and commit index.html + starhermit-files.json.
+launch=index.html
+engine.api=1
+engine.entry=native/main.ts
+engine.version=1.15.0
+engine.minor=17
+engine.capabilities=platform,storage,clipboard
+
+# Keyboard controls (players rebind keys and pads in the runtime's Options).
+# The pointer steers too: the cell drifts toward it over the dish; on touch
+# screens a drag or tap on the dish steers and the HUD's buttons act.
 control.up=ArrowUp+KeyW | Steer up
 control.down=ArrowDown+KeyS | Steer down
 control.left=ArrowLeft+KeyA | Steer left
@@ -12,3 +27,15 @@ control.split=Space | Split
 control.eject=KeyE | Eject mass
 control.hint=KeyH | Hint
 control.pause=Escape+KeyP | Pause / resume
+engine.group.up=Steering
+engine.group.split=Actions
+
+# Gamepad defaults for the same actions: the left stick (or D-pad) steers.
+engine.gamepad.up=LeftStickUp+DpadUp
+engine.gamepad.down=LeftStickDown+DpadDown
+engine.gamepad.left=LeftStickLeft+DpadLeft
+engine.gamepad.right=LeftStickRight+DpadRight
+engine.gamepad.split=South
+engine.gamepad.eject=West
+engine.gamepad.hint=North
+engine.gamepad.pause=Start

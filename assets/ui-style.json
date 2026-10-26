@@ -1,0 +1,245 @@
+{
+  "styles": {
+    ".screen": {
+      "background": "$scrim"
+    },
+    ".screen-title": {
+      "background": [
+        {
+          "type": "linear",
+          "stops": ["#04131b8c", "#04131bb3"]
+        },
+        {
+          "image": "assets/title-backdrop.webp",
+          "size": "cover"
+        },
+        "#04131b"
+      ]
+    },
+    ".screen-plain": {
+      "background": "#04131bf2"
+    },
+    ".game-title": {
+      "text": {
+        "color": "$ink",
+        "size": 51.2,
+        "weight": "700"
+      }
+    },
+    ".game-title-compact": {
+      "text": {
+        "size": 33.6
+      }
+    },
+    ".h2": {
+      "text": {
+        "color": "$ink",
+        "size": 24,
+        "weight": "700"
+      }
+    },
+    ".tagline": {
+      "text": {
+        "color": "$ink"
+      }
+    },
+    ".sub": {
+      "text": {
+        "color": "#eafcffbf",
+        "size": 12.8
+      }
+    },
+    ".body-text": {
+      "text": {
+        "color": "$ink"
+      }
+    },
+    ".btn": {
+      "background": "$btn",
+      "border": {
+        "width": 1,
+        "color": "$btn-line",
+        "style": "solid"
+      },
+      "radius": 10,
+      "padding": {
+        "top": 12,
+        "end": 22,
+        "bottom": 12,
+        "start": 22
+      },
+      "minHeight": 44,
+      "text": {
+        "color": "$ink",
+        "size": 17.6,
+        "align": "center"
+      },
+      "hovered": {
+        "background": "$btn-hover"
+      },
+      "focusVisible": {
+        "focusRing": {
+          "width": 2,
+          "color": "$focus",
+          "offset": 2
+        }
+      },
+      "disabled": {
+        "opacity": 0.45
+      }
+    },
+    ".btn-compact": {
+      "padding": {
+        "top": 8,
+        "end": 16,
+        "bottom": 8,
+        "start": 16
+      },
+      "text": {
+        "size": 16
+      }
+    },
+    ".btn-item": {
+      "text": {
+        "align": "center"
+      }
+    },
+    ".btn-act": {
+      "padding": {
+        "top": 10,
+        "end": 16,
+        "bottom": 10,
+        "start": 16
+      },
+      "minWidth": 64,
+      "minHeight": 44
+    },
+    ".btn-title": {
+      "text": {
+        "color": "$ink",
+        "size": 17.6
+      }
+    },
+    ".btn-sub": {
+      "text": {
+        "color": "#eafcffbf",
+        "size": 12.8
+      }
+    },
+    ".btn-done": {
+      "text": {
+        "color": "$focus",
+        "size": 12.8
+      }
+    },
+    ".hud-objective": {
+      "text": {
+        "color": "$ink",
+        "weight": "600",
+        "shadow": {
+          "y": 1,
+          "blur": 3,
+          "color": "#000000b3"
+        }
+      }
+    },
+    ".hud-progress": {
+      "text": {
+        "color": "#eafcffe6",
+        "size": 14.4,
+        "shadow": {
+          "y": 1,
+          "blur": 3,
+          "color": "#000000b3"
+        }
+      }
+    },
+    ".captions": {
+      "background": "#00000073",
+      "radius": 8,
+      "padding": {
+        "top": 4,
+        "end": 10,
+        "bottom": 4,
+        "start": 10
+      }
+    },
+    ".captions-text": {
+      "text": {
+        "color": "$ink",
+        "size": 15.2,
+        "shadow": {
+          "y": 1,
+          "blur": 3,
+          "color": "#000000cc"
+        }
+      }
+    },
+    ".bd-dt": {
+      "text": {
+        "color": "#eafcffd9"
+      }
+    },
+    ".bd-dd": {
+      "text": {
+        "color": "$ink",
+        "align": "end",
+        "numerals": "tabular"
+      }
+    },
+    ".total": {
+      "text": {
+        "color": "$ink",
+        "weight": "600"
+      }
+    },
+    ".result-art": {
+      "radius": 14
+    },
+    ".help-text": {
+      "text": {
+        "color": "$ink",
+        "align": "start"
+      }
+    },
+    ".setrow": {
+      "text": {
+        "color": "$ink"
+      }
+    },
+    ".toast": {
+      "background": "#04131bf0",
+      "border": {
+        "width": 1,
+        "color": "$btn-line",
+        "style": "solid"
+      },
+      "radius": 10,
+      "padding": {
+        "top": 10,
+        "end": 16,
+        "bottom": 10,
+        "start": 16
+      }
+    },
+    ".toast-text": {
+      "text": {
+        "color": "$ink",
+        "align": "center"
+      }
+    }
+  },
+  "animations": {},
+  "tokens": {
+    "accent": "#4fd8c2",
+    "bg": "#04131b",
+    "btn": "#4fd8c21f",
+    "btn-hover": "#4fd8c240",
+    "btn-line": "#4fd8c28c",
+    "focus": "#9bf6e4",
+    "ink": "#eafcff",
+    "scrim": "#04131bd1"
+  },
+  "layouts": {},
+  "dropped": []
+}

@@ -1,0 +1,44 @@
+# The daily (today's from the platform's clock, the device's UTC date in a
+# check) from Daily Challenge → Begin the day, paused and left; then the
+# Lean Drift challenge, where E is refused (ejecting is off in this round),
+# played on to its pause and left; Escape walks back to the title.
+until 300 Play
+frames 30
+click Play
+until 60 Choose a mode
+frames 10
+click Daily Challenge
+until 60 Begin the day
+frames 10
+expect Ranked.
+save daily
+click Begin the day
+until 30 · Rank 
+frames 90
+save daily-play
+key Escape 2
+until 30 Paused
+frames 10
+click Leave to modes
+until 60 Choose a mode
+frames 10
+click Challenge
+until 60 Lean Drift
+frames 10
+save challenges
+click Lean Drift
+until 30 Reach 140 mass
+frames 30
+key KeyE 2
+until 10 Cannot eject
+expect ejecting is off in this round
+save challenge-play
+frames 5
+key Escape 2
+until 30 Paused
+frames 10
+click Leave to modes
+until 60 Choose a mode
+frames 10
+key Escape 2
+until 60 Help & rules

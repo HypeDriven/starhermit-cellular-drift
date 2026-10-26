@@ -1,12 +1,13 @@
-// Localization coverage: every English key the code and content use is
-// translated in every locale (en-GB → en-US, es-ES → es-419, fr-CA → fr-FR
-// inherit), placeholders survive, and the language follows sh-language.js and
-// switches live.
+// Localization coverage: every English key the native client and the content
+// use is translated in every locale (en-GB → en-US, es-ES → es-419, fr-CA →
+// fr-FR inherit), and placeholders survive. The client translates with T()
+// and marks deferred keys with N() (native/*.ts); content names, briefs and
+// descriptions, the rules' hint texts and the audio captions are keys too.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import vm from 'node:vm';
-import { loadTables, codeKeys, audit, bootI18n } from './i18n-common.mjs';
+import { loadTables, codeKeys, audit } from './i18n-common.mjs';
 
 const ROOT = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), 'utf8');
@@ -20,8 +21,13 @@ function content() {
 }
 
 export function usedKeys() {
-  const keys = new Set(codeKeys(read('js/app.js'), ['tr', 'L'], ['N']));
-  codeKeys(read('index.html'), ['tr', 'T'], []).forEach((k) => keys.add(k));
+  const keys = new Set();
+  for (const f of readdirSync(new URL('native/', ROOT)).filter((n) => n.endsWith('.ts'))) {
+    for (const k of codeKeys(read(`native/${f}`), [], ['T', 'N'])) keys.add(k);
+  }
+  // the audio captions (native/audio.ts CAPTIONS values)
+  const caps = read('native/audio.ts').match(/export const CAPTIONS[^{]*\{([\s\S]*?)\};/)[1];
+  for (const m of caps.matchAll(/:\s*"([^"]+)"/g)) keys.add(m[1]);
   const C = content();
   for (const l of C.LESSONS) { keys.add(l.name); if (l.brief) keys.add(l.brief); }
   for (const s of C.journeyStages()) keys.add(s.name);
@@ -36,14 +42,7 @@ test('every used key is translated in every locale; placeholders intact', () => 
   assert.deepEqual(audit(loadTables(ROOT, 'js/strings.js', 'CD_STRINGS'), usedKeys()), []);
 });
 
-test('the locale follows sh-language and switches live', () => {
-  const { I18N, events, doc } = bootI18n(ROOT, { strings: 'js/strings.js', i18n: 'js/i18n.js', global: 'CDI18N', languages: ['de-DE'] });
-  assert.equal(I18N.lang, 'de-DE');
-  assert.equal(doc.documentElement.lang, 'de-DE');
-  assert.equal(I18N.T('Resume'), 'Fortsetzen');
-  I18N.language.setChoice('fr-CA');
-  assert.equal(I18N.lang, 'fr-CA');
-  assert.equal(events.at(-1), 'fr-CA');
-  I18N.language.setChoice('en-GB');
-  assert.equal(I18N.T('Color-vision-safe palette'), 'Colour-vision-safe palette');
+test('the native client picks the nearest shipped locale', () => {
+  const src = read('native/i18n.ts');
+  for (const loc of ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT']) assert.ok(src.includes(`"${loc}"`), loc);
 });

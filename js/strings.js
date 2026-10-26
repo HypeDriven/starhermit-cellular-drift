@@ -1,4 +1,4 @@
-/* Cellular Drift — translation tables (see js/i18n.js).
+/* Cellular Drift — translation tables (see native/i18n.ts).
  * Each row: [English key, es-419, de-DE, fr-FR, pt-BR, it-IT]. en-GB, es-ES and
  * fr-CA list only where they differ from en-US, es-419 and fr-FR.
  * "Cellular Drift" and the rival cells' names are names and stay as they are.
@@ -6,15 +6,6 @@
 (function (root) {
   'use strict';
   var ROWS = [
-    // ---- boot, compat
-    ['Cellular Drift could not start', 'Cellular Drift no pudo iniciarse', 'Cellular Drift konnte nicht starten', 'Cellular Drift n’a pas pu démarrer', 'Não foi possível iniciar o Cellular Drift', 'Impossibile avviare Cellular Drift'],
-    ['Reload to fetch a fresh copy. If it keeps happening, your browser may be blocking modern JavaScript modules or WebGL.', 'Vuelve a cargar para obtener una copia nueva. Si sigue pasando, puede que tu navegador esté bloqueando los módulos de JavaScript modernos o WebGL.', 'Lade neu, um eine frische Kopie zu holen. Passiert es weiter, blockiert dein Browser vielleicht moderne JavaScript-Module oder WebGL.', 'Rechargez pour obtenir une copie neuve. Si le problème persiste, votre navigateur bloque peut-être les modules JavaScript modernes ou WebGL.', 'Recarregue para obter uma cópia nova. Se continuar acontecendo, seu navegador pode estar bloqueando módulos JavaScript modernos ou o WebGL.', 'Ricarica per ottenere una copia nuova. Se succede ancora, il browser potrebbe bloccare i moduli JavaScript moderni o WebGL.'],
-    ['Reload', 'Volver a cargar', 'Neu laden', 'Recharger', 'Recarregar', 'Ricarica'],
-    ['A script failed to load or run: {reason}', 'Un script no se pudo cargar o ejecutar: {reason}', 'Ein Skript konnte nicht geladen oder ausgeführt werden: {reason}', 'Un script n’a pas pu se charger ou s’exécuter : {reason}', 'Um script não pôde ser carregado ou executado: {reason}', 'Uno script non è stato caricato o eseguito: {reason}'],
-    ['Startup failed: {reason}', 'Falló el inicio: {reason}', 'Start fehlgeschlagen: {reason}', 'Échec du démarrage : {reason}', 'Falha ao iniciar: {reason}', 'Avvio non riuscito: {reason}'],
-    ['The game did not finish loading in time (a script or the 3D renderer is missing or blocked).', 'El juego no terminó de cargar a tiempo (falta o está bloqueado un script o el renderizador 3D).', 'Das Spiel wurde nicht rechtzeitig geladen (ein Skript oder der 3D-Renderer fehlt oder ist blockiert).', 'Le jeu n’a pas fini de charger à temps (un script ou le moteur 3D est absent ou bloqué).', 'O jogo não terminou de carregar a tempo (um script ou o renderizador 3D está faltando ou bloqueado).', 'Il gioco non ha finito di caricarsi in tempo (manca o è bloccato uno script o il motore 3D).'],
-    ['3D unavailable', '3D no disponible', '3D nicht verfügbar', '3D indisponible', '3D indisponível', '3D non disponibile'],
-    ['Cellular Drift needs WebGL to render the dish. Your progress and settings are preserved; try a browser with WebGL enabled.', 'Cellular Drift necesita WebGL para dibujar la placa. Tu progreso y tu configuración se conservan; prueba con un navegador con WebGL activado.', 'Cellular Drift braucht WebGL, um die Schale darzustellen. Fortschritt und Einstellungen bleiben erhalten; versuch es mit einem Browser mit aktiviertem WebGL.', 'Cellular Drift a besoin de WebGL pour afficher la boîte. Votre progression et vos réglages sont conservés ; essayez un navigateur avec WebGL activé.', 'O Cellular Drift precisa de WebGL para desenhar a placa. Seu progresso e suas configurações estão preservados; tente um navegador com WebGL ativado.', 'Cellular Drift ha bisogno di WebGL per disegnare la piastra. Progressi e impostazioni sono conservati; prova un browser con WebGL attivo.'],
     // ---- title, modes
     ['A realtime mass arena. Move, absorb, split, eject — and manage the threats that hunt you.', 'Una arena de masa en tiempo real. Muévete, absorbe, divídete, expulsa… y controla las amenazas que te cazan.', 'Eine Echtzeit-Arena der Masse. Bewegen, aufnehmen, teilen, ausstoßen — und die Gefahren im Griff behalten, die dich jagen.', 'Une arène de masse en temps réel. Bougez, absorbez, divisez-vous, éjectez — et gérez les menaces qui vous traquent.', 'Uma arena de massa em tempo real. Mova-se, absorva, divida-se, ejete — e lide com as ameaças que caçam você.', 'Un’arena di massa in tempo reale. Muoviti, assorbi, dividiti, espelli e tieni a bada le minacce che ti danno la caccia.'],
     ['Play', 'Jugar', 'Spielen', 'Jouer', 'Jogar', 'Gioca'],
@@ -146,17 +137,9 @@
     ['Resume', 'Continuar', 'Fortsetzen', 'Reprendre', 'Continuar', 'Riprendi'],
     ['Restart round', 'Reiniciar ronda', 'Runde neu starten', 'Recommencer la manche', 'Reiniciar rodada', 'Ricomincia la partita'],
     ['Leave to modes', 'Salir a los modos', 'Zu den Modi', 'Retour aux modes', 'Sair para os modos', 'Torna alle modalità'],
-    ['Music volume', 'Volumen de música', 'Musiklautstärke', 'Volume de la musique', 'Volume da música', 'Volume della musica'],
-    ['Effects volume', 'Volumen de efectos', 'Effektlautstärke', 'Volume des effets', 'Volume dos efeitos', 'Volume degli effetti'],
-    ['Ambience volume', 'Volumen de ambiente', 'Atmosphärenlautstärke', 'Volume de l’ambiance', 'Volume do ambiente', 'Volume dell’ambiente'],
-    ['Voice volume', 'Volumen de voz', 'Sprachlautstärke', 'Volume de la voix', 'Volume da voz', 'Volume della voce'],
-    ['Mute all audio', 'Silenciar todo el audio', 'Gesamten Ton stummschalten', 'Couper tout le son', 'Silenciar todo o áudio', 'Silenzia tutto l’audio'],
     ['Captions / text cues', 'Subtítulos / avisos de texto', 'Untertitel / Texthinweise', 'Sous-titres / indications écrites', 'Legendas / avisos em texto', 'Didascalie / segnali di testo'],
-    ['Reduced motion', 'Movimiento reducido', 'Weniger Bewegung', 'Animations réduites', 'Movimento reduzido', 'Movimento ridotto'],
-    ['High contrast', 'Alto contraste', 'Hoher Kontrast', 'Contraste élevé', 'Alto contraste', 'Alto contrasto'],
     ['Color-vision-safe palette', 'Paleta apta para daltonismo', 'Farbsehschwäche-freundliche Palette', 'Palette adaptée au daltonisme', 'Paleta para daltonismo', 'Tavolozza per daltonici'],
     // ---- results
-    ['Results', 'Resultados', 'Ergebnis', 'Résultats', 'Resultados', 'Risultati'],
     ['Round over', 'Ronda terminada', 'Runde vorbei', 'Manche terminée', 'Rodada encerrada', 'Partita finita'],
     ['Goal complete!', '¡Objetivo cumplido!', 'Ziel erreicht!', 'Objectif atteint !', 'Objetivo cumprido!', 'Obiettivo raggiunto!'],
     ['Last cell drifting — you win!', 'Eres la última célula a la deriva: ¡ganaste!', 'Letzte treibende Zelle — du gewinnst!', 'Dernière cellule à la dérive — vous gagnez !', 'Última célula à deriva — você venceu!', 'Ultima cellula alla deriva: hai vinto!'],
@@ -189,7 +172,35 @@
     ['Pause with Esc or the Pause button. Rank is by mass and survival; ties break on objective completion, fewer invalid actions, then faster time.', 'Pausa con Esc o el botón Pausa. La posición depende de la masa y la supervivencia; los empates se deciden por objetivo cumplido, menos acciones no válidas y luego menor tiempo.', 'Pausiere mit Esc oder der Pause-Taste. Der Platz richtet sich nach Masse und Überleben; bei Gleichstand entscheiden das erreichte Ziel, weniger ungültige Aktionen, dann die schnellere Zeit.', 'Mettez en pause avec Échap ou le bouton Pause. Le rang dépend de la masse et de la survie ; en cas d’égalité : objectif atteint, moins d’actions invalides, puis le temps le plus court.', 'Pause com Esc ou o botão Pausar. A posição depende da massa e da sobrevivência; empates são decididos pelo objetivo cumprido, menos ações inválidas e depois menor tempo.', 'Metti in pausa con Esc o il pulsante Pausa. La posizione dipende da massa e sopravvivenza; in caso di parità contano obiettivo raggiunto, meno azioni non valide, poi il tempo più breve.'],
     ['Close', 'Cerrar', 'Schließen', 'Fermer', 'Fechar', 'Chiudi'],
     ['Cannot split: {reason}', 'No se puede dividir: {reason}', 'Teilen nicht möglich: {reason}', 'Impossible de se diviser : {reason}', 'Não é possível dividir: {reason}', 'Impossibile dividersi: {reason}'],
-    ['Cannot eject: {reason}', 'No se puede expulsar: {reason}', 'Ausstoßen nicht möglich: {reason}', 'Impossible d’éjecter : {reason}', 'Não é possível ejetar: {reason}', 'Impossibile espellere: {reason}']
+    ['Cannot eject: {reason}', 'No se puede expulsar: {reason}', 'Ausstoßen nicht möglich: {reason}', 'Impossible d’éjecter : {reason}', 'Não é possível ejetar: {reason}', 'Impossibile espellere: {reason}'],
+    // ---- engine client: Options note, touch and gamepad help, StarHermit account and leaderboard lines, audio captions
+    ['Options', 'Opciones', 'Optionen', 'Options', 'Opções', 'Opzioni'],
+    ['Sound, graphics, language, controls, text size, high contrast and reduced motion are in the StarHermit Options.', 'El sonido, los gráficos, el idioma, los controles, el tamaño del texto, el alto contraste y el movimiento reducido están en las Opciones de StarHermit.', 'Ton, Grafik, Sprache, Steuerung, Textgröße, hoher Kontrast und reduzierte Bewegung sind in den StarHermit-Optionen.', 'Le son, les graphismes, la langue, les commandes, la taille du texte, le contraste élevé et les animations réduites se trouvent dans les Options de StarHermit.', 'Som, gráficos, idioma, controles, tamanho do texto, alto contraste e movimento reduzido ficam nas Opções do StarHermit.', 'Audio, grafica, lingua, comandi, dimensione del testo, contrasto elevato e movimento ridotto si trovano nelle Opzioni di StarHermit.'],
+    ['Touch: drag or tap on the dish to steer, and use the Split, Eject, Hint and Pause buttons. Gamepad: {stick} steers; {split} splits, {eject} ejects, {hint} shows a hint, {pause} pauses.', 'Táctil: arrastra o toca la placa para dirigir y usa los botones Dividir, Expulsar, Pista y Pausa. Mando: {stick} dirige; {split} divide, {eject} expulsa, {hint} muestra una pista y {pause} pausa.', 'Touch: Ziehe oder tippe auf die Schale, um zu steuern, und nutze die Tasten Teilen, Ausstoßen, Tipp und Pause. Gamepad: {stick} steuert; {split} teilt, {eject} stößt aus, {hint} zeigt einen Tipp, {pause} pausiert.', 'Tactile : faites glisser ou touchez la boîte pour diriger, et utilisez les boutons Diviser, Éjecter, Indice et Pause. Manette : {stick} dirige ; {split} divise, {eject} éjecte, {hint} affiche un indice, {pause} met en pause.', 'Toque: arraste ou toque na placa para guiar e use os botões Dividir, Ejetar, Dica e Pausar. Controle: {stick} guia; {split} divide, {eject} ejeta, {hint} mostra uma dica e {pause} pausa.', 'Touch: trascina o tocca la piastra per guidare e usa i pulsanti Dividi, Espelli, Suggerimento e Pausa. Gamepad: {stick} guida; {split} divide, {eject} espelle, {hint} mostra un suggerimento, {pause} mette in pausa.'],
+    ['Sign in with StarHermit', 'Iniciar sesión con StarHermit', 'Mit StarHermit anmelden', 'Se connecter avec StarHermit', 'Entrar com StarHermit', 'Accedi con StarHermit'],
+    ['Invite a friend', 'Invitar a un amigo', 'Freund einladen', 'Inviter un ami', 'Convidar um amigo', 'Invita un amico'],
+    ['Invite link copied — send it to a friend.', 'Enlace de invitación copiado: envíaselo a un amigo.', 'Einladungslink kopiert – schick ihn einem Freund.', 'Lien d’invitation copié — envoyez-le à un ami.', 'Link de convite copiado — envie para um amigo.', 'Link di invito copiato: invialo a un amico.'],
+    ['Could not copy the invite link.', 'No se pudo copiar el enlace de invitación.', 'Der Einladungslink konnte nicht kopiert werden.', 'Impossible de copier le lien d’invitation.', 'Não foi possível copiar o link de convite.', 'Impossibile copiare il link di invito.'],
+    ['Signed out of StarHermit — progress keeps saving on this device.', 'Sesión de StarHermit cerrada: el progreso se sigue guardando en este dispositivo.', 'Von StarHermit abgemeldet – der Fortschritt wird weiter auf diesem Gerät gespeichert.', 'Déconnecté de StarHermit — la progression reste enregistrée sur cet appareil.', 'Você saiu do StarHermit — o progresso continua salvo neste dispositivo.', 'Disconnesso da StarHermit: i progressi restano salvati su questo dispositivo.'],
+    ['Posting score to the leaderboard…', 'Publicando la puntuación en la clasificación…', 'Punktzahl wird in die Bestenliste eingetragen…', 'Envoi du score au classement…', 'Enviando pontuação para o placar…', 'Invio del punteggio alla classifica…'],
+    ['Leaderboard rank: #{rank}', 'Puesto en la clasificación: #{rank}', 'Platz in der Bestenliste: #{rank}', 'Rang au classement : #{rank}', 'Posição no placar: #{rank}', 'Posizione in classifica: #{rank}'],
+    ['Score posted to the leaderboard.', 'Puntuación publicada en la clasificación.', 'Punktzahl in die Bestenliste eingetragen.', 'Score envoyé au classement.', 'Pontuação enviada para o placar.', 'Punteggio inviato alla classifica.'],
+    ['Score not posted to the leaderboard.', 'No se pudo publicar la puntuación en la clasificación.', 'Punktzahl wurde nicht in die Bestenliste eingetragen.', 'Score non envoyé au classement.', 'A pontuação não foi enviada para o placar.', 'Punteggio non inviato alla classifica.'],
+    ['absorbed a mote', 'absorbiste una mota', 'Partikel aufgenommen', 'particule absorbée', 'partícula absorvida', 'particella assorbita'],
+    ['absorbed a pellet', 'absorbiste un gránulo', 'Kügelchen aufgenommen', 'granule absorbé', 'grânulo absorvido', 'granulo assorbito'],
+    ['absorbed a rival cell', 'absorbiste una célula rival', 'Rivalenzelle aufgenommen', 'cellule rivale absorbée', 'célula rival absorvida', 'cellula rivale assorbita'],
+    ['split', 'división', 'geteilt', 'division', 'divisão', 'divisione'],
+    ['ejected mass', 'masa expulsada', 'Masse ausgestoßen', 'masse éjectée', 'massa ejetada', 'massa espulsa'],
+    ['burst on a barb', 'reventaste en una púa', 'an einem Stachel geplatzt', 'éclatement sur une épine', 'estourou num espinho', 'scoppiata su una spina'],
+    ['larger cell nearby', 'célula más grande cerca', 'größere Zelle in der Nähe', 'cellule plus grosse à proximité', 'célula maior por perto', 'cellula più grande vicina'],
+    ['cells recombined', 'células recombinadas', 'Zellen wieder vereint', 'cellules recombinées', 'células recombinadas', 'cellule ricombinate'],
+    ['hint', 'pista', 'Tipp', 'indice', 'dica', 'suggerimento'],
+    ['round start', 'inicio de la ronda', 'Rundenstart', 'début de manche', 'início da rodada', 'inizio del round'],
+    ['rewound', 'rebobinado', 'zurückgespult', 'rembobiné', 'rebobinado', 'riavvolto'],
+    ['goal complete', 'objetivo cumplido', 'Ziel erreicht', 'objectif atteint', 'objetivo concluído', 'obiettivo raggiunto'],
+    ['absorbed', 'absorbido', 'aufgenommen', 'absorbé', 'absorvido', 'assorbito'],
+    ['time up', 'se acabó el tiempo', 'Zeit abgelaufen', 'temps écoulé', 'tempo esgotado', 'tempo scaduto'],
+    ['achievement unlocked', 'logro desbloqueado', 'Erfolg freigeschaltet', 'succès débloqué', 'conquista desbloqueada', 'obiettivo sbloccato']
   ];
 
   var COLS = ['es-419', 'de-DE', 'fr-FR', 'pt-BR', 'it-IT'];
@@ -201,8 +212,9 @@
     'Color-vision-safe palette': 'Colour-vision-safe palette'
   };
   T['es-ES'] = {
+    'Could not copy the invite link.': 'No se ha podido copiar el enlace de invitación.',
+    'Score not posted to the leaderboard.': 'No se ha podido publicar la puntuación en la clasificación.',
     'Split (Space) to launch half your mass forward. Split once, then grow back to 70.': 'Divídete (Espacio) para lanzar la mitad de tu masa hacia delante. Divídete una vez y vuelve a crecer hasta 70.',
-    'Reload': 'Recargar',
     'You have been absorbed. Watch or retry.': 'Te han absorbido. Mira o vuelve a intentarlo.',
     'You were absorbed': 'Te han absorbido',
     'you were absorbed': 'te han absorbido',
@@ -210,6 +222,9 @@
     'Surrendered': 'Te has rendido'
   };
   T['fr-CA'] = {
+    'Posting score to the leaderboard…': 'Envoi du pointage au classement…',
+    'Score posted to the leaderboard.': 'Pointage envoyé au classement.',
+    'Score not posted to the leaderboard.': 'Pointage non envoyé au classement.',
     'Total score: {total} · Rank {rank}/{players}': 'Pointage total : {total} · Rang {rank}/{players}',
     'Pause with Esc or the Pause button. Rank is by mass and survival; ties break on objective completion, fewer invalid actions, then faster time.': 'Mettez en pause avec Échap ou le bouton Pause. Le rang dépend de la masse et de la survie; en cas d’égalité : objectif atteint, moins d’actions invalides, puis le temps le plus court.'
   };
