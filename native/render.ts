@@ -279,7 +279,7 @@ const playerRimMat = new MeshBasicMaterial({ color: 0xffffff, transparent: true,
 
 // The membranes' shadows on the floor. three.js cast them from the translucent
 // membranes; the engine's shadow pass leaves transparent materials out
-// (1.16.0; reported), so each cell lays a soft disc where the key light's
+// (1.16.1; reported), so each cell lays a soft disc where the key light's
 // shadow of its membrane falls: the floor is 10 below the cells' middle, the
 // light from KEY_DIR, at the shadow catcher's 42 %.
 function softDisc(): DataTexture {
@@ -493,7 +493,7 @@ function updateEnvironment(): void {
   }
   scene.environment = envTex;
   // The engine's room lights about 1 / 0.3 as strongly as three.js's (bistro-builder's
-  // finding), and a material's envMapIntensity is not applied (engine 1.16.0; reported):
+  // finding), and a material's envMapIntensity is not applied (engine 1.16.1; reported):
   // the whole environment is scaled instead, and the food's emissive makes up its glow.
   scene.environmentIntensity = 0.3;
 }
