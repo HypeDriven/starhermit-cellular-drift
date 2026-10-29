@@ -13,33 +13,29 @@
 // What changed from three.js, and why:
 // - The caustic shimmer's and the rim halo's GLSL ShaderMaterials are WGSL;
 //   the membranes' onBeforeCompile edge light is a WGSL surface hook.
-// - three.js's ShadowMaterial catcher over the floor is the floor itself:
-//   an emissive Lambert floor whose light hook darkens it by the key
-//   light's shadow (the same 42 %), so the floor keeps its authored colours.
+// - The page's unlit MeshBasicMaterial floor is an emissive Lambert floor
+//   whose light hook drops all lighting (it keeps its authored colours).
 // - The floor's per-pixel grain (getImageData noise over the whole canvas)
 //   is a hash in the floor's surface hook: the same ±7/255 grain without a
 //   script loop over millions of pixels.
-// - The hemisphere fill (lamp-pale sky toward the camera, deep teal below)
-//   is a second, shadowless directional light from the camera's side: the
-//   dish is seen straight down, so every visible surface faces the "sky".
 // - IcosahedronGeometry motes and pellets are low-segment spheres;
 //   MeshPhysicalMaterial's iridescence and sheen are not drawn (its
 //   clearcoat is).
 // - The EffectComposer chain (UnrealBloom, the grade ShaderPass, OutputPass,
 //   SMAA / FXAA / canvas MSAA) is renderer.bloom / grade / antialias.
-// - The fitted, texel-snapped shadow box is the engine's view-based
-//   directional shadow (`shadow.distance`), with the camera kept just above
-//   the dish so the view's depth is short.
-// - Light intensities are three.js r160's divided by π (the engine's
-//   convention). The soft particle dot is a DataTexture.
+// - Lights (ambient, hemisphere, key), the fitted texel-snapped shadow box with
+//   its biases, the ShadowMaterial catcher and the room environment are the
+//   page's own (three r160 units, engine.minor 28); membranes and barbs take
+//   the room as their own envMap at the page's envMapIntensity. The soft
+//   particle dot is a DataTexture.
 // - Layers, the adaptive resolution and the fps meter are gone: the runtime
 //   owns resolution and the frame-rate readout.
 import {
   ACESFilmicToneMapping, AdditiveBlending, AmbientLight, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry,
   Color, DataTexture, DirectionalLight, DoubleSide, ExtrudeGeometry, Group, InstancedMesh, Matrix4, Mesh,
-  MeshBasicMaterial, MeshLambertMaterial, PlaneGeometry, MeshPhysicalMaterial, MeshStandardMaterial, OrthographicCamera,
+  MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial, OrthographicCamera,
   PMREMGenerator, Points, PointsMaterial, Quaternion, RingGeometry, RoomEnvironment, SRGBColorSpace, ShaderMaterial,
-  Shape, SphereGeometry, Vector3, mergeGeometries, renderer, scene,
+  HemisphereLight, ShadowMaterial, Shape, SphereGeometry, Vector3, mergeGeometries, renderer, scene,
 } from "starhermit:scene";
 import type { Material, MaterialHooks, Texture } from "starhermit:scene";
 import { OffscreenCanvas } from "starhermit:canvas";
@@ -57,21 +53,20 @@ export const CAM = {
 const PI = Math.PI;
 const KEY_DIR = new Vector3(-0.4, 0.6, 1).normalize();
 /** The camera sits this far above the dish floor (orthographic: height changes nothing on screen). */
-const CAM_Z = 60;
+const CAM_Z = 1000;
 
 export interface Focus { x: number; y: number; radius: number; include?: { x: number; y: number; radius: number } }
 
-const camera = new OrthographicCamera(-1, 1, 1, -1, 0.5, 120);
+const camera = new OrthographicCamera(-1, 1, 1, -1, 1, 2000);
 camera.position.set(0, 0, CAM_Z);
 
 // --- lights ---------------------------------------------------------------------------
-const key = new DirectionalLight(0xfff4e0, 1.2 / PI);
+const key = new DirectionalLight(0xfff4e0, 1.2);
 key.shadow.bias = -0.0005;
-key.shadow.normalBias = 1;
-key.shadow.distance = CAM_Z + 20;
-const fill = new DirectionalLight(0xdff8ff, 0.8 / PI);
-fill.position.set(0, 0, 100);
-const ambient = new AmbientLight(0xffffff, 0.3 / PI);
+key.shadow.normalBias = 0.02;
+const hemi = new HemisphereLight(0xdff8ff, 0x0b2a33, 0.8);
+hemi.position.set(0, 0, 1);
+const ambient = new AmbientLight(0xffffff, 0.3);
 
 let look: Look | null = null;
 let theme: Theme = {
@@ -110,7 +105,7 @@ let floorTex: CanvasTexture | null = null;
 
 // The floor's grain and the key light's shadow on it (see the header).
 const floorHooks: MaterialHooks = {
-  uniforms: { uSize: { value: 512 }, uShadow: { value: 0.42 } },
+  uniforms: { uSize: { value: 512 } },
   surface: `
 fn cd_hash(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(12.9898, 78.233))) * 43758.5453); }
 fn surface(s: Surface) -> Surface {
@@ -123,7 +118,7 @@ fn surface(s: Surface) -> Surface {
   light: `
 fn light(l: Light) -> Light {
   var o = l;
-  o.emissive = l.emissive * (1.0 - uniforms.uShadow * (1.0 - l.shadow));
+  o.emissive = l.emissive;
   o.sun = vec3f(0.0);
   o.direct = vec3f(0.0);
   o.indirect = vec3f(0.0);
@@ -228,9 +223,14 @@ function buildEnvironment(radius: number): void {
   floorMat.hooks = { ...floorHooks };
   floorMesh = new Mesh(new CircleGeometry(radius, 96), floorMat);
   floorMesh.position.z = -10;
-  floorMesh.receiveShadow = true;
   const add = (m: Mesh): Mesh => { envGroup.add(m); envMeshes.push(m); return m; };
   add(floorMesh);
+
+  // shadow catcher: the floor keeps its authored colours, shadows only darken it
+  const catcher = add(new Mesh(new CircleGeometry(radius, 96), new ShadowMaterial({ color: 0x000000, opacity: 0.42 })));
+  catcher.position.z = -9.8;
+  catcher.receiveShadow = true;
+  catcher.visible = L.shadows > 0;
 
   causticUniforms.uRadius.value = radius;
   causticUniforms.uColor.value.set(theme.membrane).lerp(new Color(0xffffff), 0.5);
@@ -271,32 +271,12 @@ function buildEnvironment(radius: number): void {
 let cellGeo = new SphereGeometry(1, 24, 16);
 const nucleusGeo = new SphereGeometry(1, 14, 10);
 const rimGeo = new RingGeometry(0.94, 1.06, 48);
-interface CellView { group: Group; outer: Mesh; nucleus: Mesh; rim: Mesh | null; shadow: Mesh }
+interface CellView { group: Group; outer: Mesh; nucleus: Mesh; rim: Mesh | null }
 const cellViews = new Map<number, CellView>();
 const materialCache = new Map<string, Material>();
 const nucleusMat = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
 const playerRimMat = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: DoubleSide });
 
-// The membranes' shadows on the floor. three.js cast them from the translucent
-// membranes; the engine's shadow pass leaves transparent materials out
-// (1.24.0; reported), so each cell lays a soft disc where the key light's
-// shadow of its membrane falls: the floor is 10 below the cells' middle, the
-// light from KEY_DIR, at the shadow catcher's 42 %.
-function softDisc(): DataTexture {
-  const n = 64;
-  const px = new Uint8Array(n * n * 4);
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      const d = Math.hypot(x + 0.5 - n / 2, y + 0.5 - n / 2) / (n / 2);
-      const a = d <= 0.8 ? 1 : Math.max(0, 1 - (d - 0.8) / 0.2);
-      px[(y * n + x) * 4 + 3] = Math.round(a * 255);
-    }
-  }
-  return new DataTexture(px, n, n);
-}
-const shadowGeo = new PlaneGeometry(2, 2);
-const shadowMat = new MeshBasicMaterial({ color: 0x000000, map: softDisc(), transparent: true, opacity: 0.42, depthWrite: false });
-const SHADOW_DX = (-KEY_DIR.x / KEY_DIR.z) * 10, SHADOW_DY = (-KEY_DIR.y / KEY_DIR.z) * 10;
 
 /** The membrane's edge light: a view-space fresnel term added to the emissive (the dish is seen down -Z). */
 function rimHooks(strength: number): MaterialHooks {
@@ -325,6 +305,7 @@ function membraneMaterial(hue: number, isPlayer: boolean): Material {
   else if (L.detailed && kind === "physical") {
     mat = new MeshPhysicalMaterial({ ...common, roughness: 0.28, metalness: 0, envMapIntensity: 0.55, clearcoat: 0.8, clearcoatRoughness: 0.15 });
   } else mat = new MeshStandardMaterial({ ...common, roughness: 0.32, metalness: 0, envMapIntensity: 0.55 });
+  if (mat instanceof MeshStandardMaterial) mat.envMap = L.reflections ? envTex : null;
   mat.hooks = rimHooks(L.detailed ? 1.1 : 0.8);
   materialCache.set(k, mat);
   return mat;
@@ -345,12 +326,8 @@ function makeCellView(hue: number, isPlayer: boolean): CellView {
     rim.position.z = 0.5;
     group.add(rim);
   }
-  const shadow = new Mesh(shadowGeo, shadowMat);
-  shadow.position.set(SHADOW_DX, SHADOW_DY, -9.7);
-  shadow.visible = look!.shadows > 0;
-  group.add(shadow);
   cellGroup.add(group);
-  return { group, outer, nucleus, rim, shadow };
+  return { group, outer, nucleus, rim };
 }
 function clearCells(): void {
   for (const [, v] of cellViews) cellGroup.remove(v.group);
@@ -392,6 +369,7 @@ function syncBarbs(state: State): void {
   barbMat = new MeshStandardMaterial({
     color: theme.barb, roughness: 0.45, metalness: 0.1, emissive: new Color(theme.barb).multiplyScalar(0.3), envMapIntensity: 0.6,
   });
+  barbMat.envMap = look?.reflections ? envTex : null;
   for (const b of state.barbs) {
     const mesh = new Mesh(barbGeo, barbMat);
     mesh.castShadow = true;
@@ -488,14 +466,34 @@ let envTex: Texture | null = null;
 function updateEnvironment(): void {
   if (!look!.reflections) { scene.environment = null; return; }
   if (!envTex) {
-    try { envTex = new PMREMGenerator().fromScene(new RoomEnvironment(), 0.04).texture; }
+    try { envTex = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(renderer), 0.04).texture; }
     catch (e) { console.warn(`environment: ${e instanceof Error ? e.message : String(e)}`); envTex = null; }
   }
+  // As the page: scene.environment at full strength; materials the page gave their own
+  // envMapIntensity (membranes 0.55, barbs 0.6) take the room as their own envMap, since
+  // r160 scaled scene.environment per material and the engine (as r163+) does not.
   scene.environment = envTex;
-  // The engine's room lights about 1 / 0.3 as strongly as three.js's (bistro-builder's
-  // finding), and a material's envMapIntensity is not applied (engine 1.24.0; reported):
-  // the whole environment is scaled instead, and the food's emissive makes up its glow.
-  scene.environmentIntensity = 0.3;
+  scene.environmentIntensity = 1;
+}
+
+// Key-light shadow box fitted to the visible part of the dish (the page's), snapped to
+// whole texels so camera follow does not make shadow edges shimmer.
+function fitShadow(): void {
+  if (!key.castShadow) return;
+  const sh = key.shadow;
+  const halfW = cam.halfH * aspect;
+  const extent = Math.min(arenaRadius + 30, Math.hypot(halfW, cam.halfH) + 30);
+  const ms = typeof sh.mapSize === "number" ? sh.mapSize : sh.mapSize.x;
+  const texel = (extent * 2) / (ms || 1024);
+  const tx = Math.round(cam.x / texel) * texel, ty = Math.round(cam.y / texel) * texel;
+  key.target.position.set(tx, ty, 0);
+  keyTmp.copy(KEY_DIR).multiplyScalar(400);
+  key.position.set(tx + keyTmp.x, ty + keyTmp.y, keyTmp.z);
+  const sc = sh.camera as OrthographicCamera;
+  if (sc.right !== extent) {
+    sc.left = -extent; sc.right = extent; sc.top = extent; sc.bottom = -extent; sc.near = 1; sc.far = 900;
+    sc.updateProjectionMatrix();
+  }
 }
 
 // --- camera ------------------------------------------------------------------------------------------------
@@ -531,7 +529,7 @@ function lerpPos(id: string, alpha: number, fallback: Snap): Snap {
 
 function build(): void {
   built = true;
-  scene.add(key, key.target, fill, fill.target, ambient, envGroup, cellGroup, moteMesh, pelletMesh, barbGroup, fxPoints, markerGroup, hintGroup);
+  scene.add(key, key.target, hemi, ambient, envGroup, cellGroup, moteMesh, pelletMesh, barbGroup, fxPoints, markerGroup, hintGroup);
   renderer.camera = camera;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
@@ -574,9 +572,7 @@ export function applyLook(next: Look): void {
   key.castShadow = shadows;
   if (shadows) key.shadow.mapSize = next.shadows;
   key.shadow.radius = next.shadows >= 4096 ? 3 : 2;
-  floorHooks.uniforms!.uShadow!.value = shadows ? 0.42 : 0;
   updateEnvironment();
-  fill.intensity = (next.reflections ? 0.6 : 0.8) / PI;
   const [ws, hs] = next.budget.cellSegments;
   cellGeo.dispose();
   cellGeo = new SphereGeometry(1, ws, hs);
@@ -676,12 +672,7 @@ export function draw(alpha: number, dt: number, focus: Focus | null, width: numb
     if (amp < 0.05) cam.shake = 0;
   }
   camera.position.set(cam.x + shX, cam.y + shY, CAM_Z);
-  // the key light follows the view (its shadow covers what is on screen)
-  key.target.position.set(cam.x, cam.y, 0);
-  keyTmp.copy(KEY_DIR).multiplyScalar(400);
-  key.position.set(cam.x + keyTmp.x, cam.y + keyTmp.y, keyTmp.z);
-  fill.target.position.set(cam.x, cam.y, 0);
-  fill.position.set(cam.x, cam.y, 100);
+  fitShadow();
 
   // cells
   const seen = new Set<number>();
@@ -702,7 +693,6 @@ export function draw(alpha: number, dt: number, focus: Focus | null, width: numb
     view.outer.scale.set(r * breathe, r / breathe, r * 0.42);
     view.nucleus.scale.set(r * 0.34, r * 0.34, r * 0.2);
     if (view.rim) view.rim.scale.set(r, r, r);
-    view.shadow.scale.set(r * breathe, r / breathe, 1);
   }
   for (const [id, view] of cellViews) {
     if (!seen.has(id)) { cellGroup.remove(view.group); cellViews.delete(id); }
