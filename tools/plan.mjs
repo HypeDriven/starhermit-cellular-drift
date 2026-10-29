@@ -37,7 +37,7 @@ let held = new Set();
 let presses = 0;
 let idle = 0; // frames run since the last line
 
-// Play-script timing, measured on the 1.22.0 runtime (one fixed step a frame):
+// Play-script timing, measured on the 1.23.0 runtime (one fixed step a frame):
 // the `until` that sees the round's HUD matches on the frame of its first
 // tick (frame 0); a hold, release or key line takes a frame of its own and
 // what it changes reaches the game from the next frame's tick; `frames N`
