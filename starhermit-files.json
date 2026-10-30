@@ -7,7 +7,7 @@
     "cover.jpg": {"sha256": "97439fd83e8a7683232c53c61407c735aeee7511bc557c21e1dee9270c73645a", "size": 201065},
     "coverart.png": {"sha256": "32522bf8df391fa7454b245dfa2e345995c915898598cc07d02fa5073155b519", "size": 202794},
     "icon.png": {"sha256": "6eb59672efa85a662b74845959c8f80470ab0bf50bb2ed0b207800fee55028d3", "size": 12654},
-    "index.html": {"sha256": "c5ec4091ad42f3584e8fb8741c350f8467b1e40072805b32854962936c95962c", "size": 1780},
+    "index.html": {"sha256": "d8a2cbae415dca150bf801b9d758854f11d8e46f8dcf9aa527c33b1183bd6a92", "size": 1780},
     "js/content.js": {"sha256": "be400efc94a1b08ff593d32a31e6adea3fba6d09923b4af7f0555fce7a22a4da", "size": 15903},
     "js/migrate.js": {"sha256": "40f6680793673b3bfc66a31b1d31b4db1dfe15b470e53e929832f0d453168e69", "size": 4213},
     "js/rng.js": {"sha256": "35c875910db84405637b7f23553dd750725194803592793efb499bfe9feaa7f6", "size": 2352},
@@ -45,7 +45,7 @@
     "sfx/time-rewind.opus": {"sha256": "868c5fc9ff148c821821ebc2993b68569b6d3eec3713d7ce20e4df67267c050b", "size": 24859},
     "sfx/time-up.opus": {"sha256": "af66d9e21bc0fe6824566b769f2c24ea1b126064c7f0230710a132f6b9d699c3", "size": 27434},
     "sfx/ui-tick.opus": {"sha256": "ab8e481aece4ede9289338d45115cfccf81d397f0e5167944d28f01618cff06f", "size": 11101},
-    "starhermit.txt": {"sha256": "f86d40602473e93e8234b8b851413837047bde779ecb01d13e2ff3a6dc50b512", "size": 1653}
+    "starhermit.txt": {"sha256": "ca5e34a8574eba5ac4ca10b87918d359721525f3aba61c55a07d670577892727", "size": 1653}
   },
   "excluded": ["node_modules/", "package-lock.json", "package.json", "server.js", "spec.md", "test-results/", "tests/", "tools/", "tsconfig.json"],
   "format": 1

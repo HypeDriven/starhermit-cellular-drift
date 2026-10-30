@@ -1,6 +1,6 @@
 # Cellular Drift — Game Design Document (running spec)
 
-This document describes Cellular Drift as it ships today: a StarHermit engine script game (engine 1.28.0, host API 1.30), played natively by the StarHermit client and in browsers by the engine's web runtime. Present tense throughout; where the design calls for something the code does not yet do, it is listed under "Design intent not yet implemented" at the end and nowhere else.
+This document describes Cellular Drift as it ships today: a StarHermit engine script game (engine 1.29.0, host API 1.31), played natively by the StarHermit client and in browsers by the engine's web runtime. Present tense throughout; where the design calls for something the code does not yet do, it is listed under "Design intent not yet implemented" at the end and nowhere else.
 
 ## 1. Overview
 
@@ -21,7 +21,7 @@ This document describes Cellular Drift as it ships today: a StarHermit engine sc
 
 | Path | Responsibility |
 |---|---|
-| `starhermit.txt` | Manifest: name, description, owner, cover, `server=score-script.js`, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.28.0`, `engine.minor=30`, `engine.capabilities=platform,storage,clipboard`, `control.*` keys, `engine.group.*`, `engine.gamepad.*` |
+| `starhermit.txt` | Manifest: name, description, owner, cover, `server=score-script.js`, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.29.0`, `engine.minor=31`, `engine.capabilities=platform,storage,clipboard`, `control.*` keys, `engine.group.*`, `engine.gamepad.*` |
 | `index.html`, `starhermit-files.json` | The engine's web loader page and file index, written by `npm run package` (`starhermit package --web .`); never edited by hand |
 | `native/main.ts` | Entry: screen flow, `startRound` for every mode, steering (pointer, keys, stick), Split / Eject / Hint, per-tick stat diffs → audio and shake, music intensity and danger ping, results with progression, achievements, the device board and score posting, lifecycle |
 | `native/screens.ts` | Every screen and the HUD in `starhermit:ui`, the toast and caption strip, the results vignette and the drawn medal |
@@ -258,7 +258,7 @@ Nine locales: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**
 
 | Feature | How |
 |---|---|
-| Manifest, cover, loader | `starhermit.txt` (engine pin 1.28.0, minor 30, capabilities platform, storage, clipboard); `index.html` + `starhermit-files.json` from `npm run package` |
+| Manifest, cover, loader | `starhermit.txt` (engine pin 1.29.0, minor 31, capabilities platform, storage, clipboard); `index.html` + `starhermit-files.json` from `npm run package` |
 | Player | `player()`; signing in and out is the runtime's (Sign in with StarHermit calls `requestSignIn`); a session ending shows a toast |
 | Cloud save | `saves`: `{ v: 1, progress }`, saved at every round's end; a conflict merges both devices' progress (`CDStore.mergeProgress`: better stars and bests, every done mark, larger lifetime counters, earliest achievements, later daily streak); a save another device wrote is merged in |
 | Browser-build migration | the JS SDK's slot `game:<slug>` (checksummed `{ sum, payload }` document) shows as foreign: its progress is merged and replaced once (`replaceForeign`), its captions / palette / theme kept where the account has none; the old per-player settings keys are imported the same way and removed (`settings.legacyKeys`, `removeLegacy`) |
