@@ -1,6 +1,6 @@
 # Cellular Drift — Game Design Document (running spec)
 
-This document describes Cellular Drift as it ships today: a StarHermit engine script game (engine 1.27.0, host API 1.29), played natively by the StarHermit client and in browsers by the engine's web runtime. Present tense throughout; where the design calls for something the code does not yet do, it is listed under "Design intent not yet implemented" at the end and nowhere else.
+This document describes Cellular Drift as it ships today: a StarHermit engine script game (engine 1.28.0, host API 1.30), played natively by the StarHermit client and in browsers by the engine's web runtime. Present tense throughout; where the design calls for something the code does not yet do, it is listed under "Design intent not yet implemented" at the end and nowhere else.
 
 ## 1. Overview
 
@@ -21,7 +21,7 @@ This document describes Cellular Drift as it ships today: a StarHermit engine sc
 
 | Path | Responsibility |
 |---|---|
-| `starhermit.txt` | Manifest: name, description, owner, cover, `server=score-script.js`, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.27.0`, `engine.minor=29`, `engine.capabilities=platform,storage,clipboard`, `control.*` keys, `engine.group.*`, `engine.gamepad.*` |
+| `starhermit.txt` | Manifest: name, description, owner, cover, `server=score-script.js`, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.28.0`, `engine.minor=30`, `engine.capabilities=platform,storage,clipboard`, `control.*` keys, `engine.group.*`, `engine.gamepad.*` |
 | `index.html`, `starhermit-files.json` | The engine's web loader page and file index, written by `npm run package` (`starhermit package --web .`); never edited by hand |
 | `native/main.ts` | Entry: screen flow, `startRound` for every mode, steering (pointer, keys, stick), Split / Eject / Hint, per-tick stat diffs → audio and shake, music intensity and danger ping, results with progression, achievements, the device board and score posting, lifecycle |
 | `native/screens.ts` | Every screen and the HUD in `starhermit:ui`, the toast and caption strip, the results vignette and the drawn medal |
@@ -201,7 +201,7 @@ The colour-vision-safe palette (the game's setting) replaces membrane/player/bar
 | | Low | Balanced | High | Ultra |
 |---|---|---|---|---|
 | Key-light shadow map | off | 1024 | 2048 | 4096 (held to the level's size) |
-| Bloom (strength 0.2 — the page's r160 0.45 squared — radius 0.2, threshold 0.9) · grade | – | on | on | on |
+| Bloom (model "r160", the page's strength 0.45, radius 0.2, threshold 0.9) · grade | – | on | on | on |
 | Anti-aliasing | MSAA | FXAA | SMAA | MSAA |
 | Reflections (room environment) | – | on | on | on |
 | Caustic shimmer · detailed floor (lamp pool, ghost walls, glass light, grain) | – | on | on | on |
@@ -209,7 +209,7 @@ The colour-vision-safe palette (the game's setting) replaces membrane/player/bar
 | Membrane segments · material | 16×10 Lambert | 24×16 standard | 28×20 physical | 40×28 physical |
 | Burst particles · plankton (×1.64 per level above the tier's first, ≤ 4×, Particles cap 300/60 or 1200/480) | 200 · 50 | 500 · 120 | 900 · 200 | 1200 · 320 |
 
-The grade is display-space: contrast 0.11, saturation 1.1, cool shadows / warm highlights (split 0.25–0.85), vignette 0.26 (0.38–0.9, scale 1 × 0.9). Render scale, resolution, adaptive resolution, the frame-rate limit and readout belong to the runtime.
+The grade is linear (the page's pass before OutputPass): S-curve 0.22, saturation 1.1, cool shadows / warm highlights (split 0.25–0.85), levels 0.99 / +0.003, light past 1 kept, vignette 0.26 (0.38–0.9, scale 1 × 0.9). Render scale, resolution, adaptive resolution, the frame-rate limit and readout belong to the runtime.
 
 **Visual assets**: `coverart.png` / `cover.jpg` (platform cover), `assets/title-backdrop.webp` (title, under the scrim; a plain scrim under high contrast), `assets/results-vignette.webp` (results hero, rounded corners). No mesh assets: everything else is procedural.
 
@@ -258,7 +258,7 @@ Nine locales: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**
 
 | Feature | How |
 |---|---|
-| Manifest, cover, loader | `starhermit.txt` (engine pin 1.27.0, minor 29, capabilities platform, storage, clipboard); `index.html` + `starhermit-files.json` from `npm run package` |
+| Manifest, cover, loader | `starhermit.txt` (engine pin 1.28.0, minor 30, capabilities platform, storage, clipboard); `index.html` + `starhermit-files.json` from `npm run package` |
 | Player | `player()`; signing in and out is the runtime's (Sign in with StarHermit calls `requestSignIn`); a session ending shows a toast |
 | Cloud save | `saves`: `{ v: 1, progress }`, saved at every round's end; a conflict merges both devices' progress (`CDStore.mergeProgress`: better stars and bests, every done mark, larger lifetime counters, earliest achievements, later daily streak); a save another device wrote is merged in |
 | Browser-build migration | the JS SDK's slot `game:<slug>` (checksummed `{ sum, payload }` document) shows as foreign: its progress is merged and replaced once (`replaceForeign`), its captions / palette / theme kept where the account has none; the old per-player settings keys are imported the same way and removed (`settings.legacyKeys`, `removeLegacy`) |

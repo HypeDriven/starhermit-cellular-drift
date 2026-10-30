@@ -580,12 +580,13 @@ export function applyLook(next: Look): void {
   rebuildDish();
   // Post effects, as the browser build's composer chain per preset. High
   // threshold: only emissive motes, rims, the marker and hint rings and glints bloom.
-  // The page's r160 UnrealBloomPass strength squared (minor 29 bloom follows r185).
-  renderer.bloom = next.bloom ? { strength: 0.2, radius: 0.2, threshold: 0.9 } : null;
-  // The grade pass: 0.22 of a smoothstep S-curve, +10 % saturation, cool shadows /
-  // warm highlights (split 0.25–0.85), vignette 0.26 from 0.38 to 0.9.
+  // The page's r160 UnrealBloomPass exactly (model "r160", strength 0.45 as written).
+  renderer.bloom = next.bloom ? { model: "r160", strength: 0.45, radius: 0.2, threshold: 0.9 } : null;
+  // The grade pass before OutputPass (linear light): 0.22 of a smoothstep S-curve, +10 % saturation,
+  // cool shadows / warm highlights (split 0.25–0.85), the s * 0.99 + 0.003 lift, light past 1 kept
+  // (mix(c, s + max(c - 1, 0), amount)), vignette 0.26 from 0.38 to 0.9.
   renderer.grade = next.grade ? {
-    space: "display", contrast: 0.11, saturation: 1.1,
+    space: "linear", contrast: 0.22, saturation: 1.1, levels: [0.99, 0.003], overRange: "keep",
     shadows: [0.95, 1.0, 1.06], highlights: [1.04, 1.01, 0.96], split: [0.25, 0.85],
     vignette: { amount: 0.26, inner: 0.38, outer: 0.9, scale: [1, 0.9] },
   } : null;
