@@ -29,6 +29,8 @@ This document describes Cellular Drift as it ships today: a StarHermit engine sc
 | `native/audio.ts` | One-shot clips on the runtime's buses, the ambience loop, the adaptive pentatonic pad rendered into clips, captions |
 | `native/platform.ts` | Save, conflict merge and the browser build's foreign save; game settings and legacy settings migration; device board; platform clock; player, invite link; score posting |
 | `native/quality.ts` | The browser build's graphics presets and budgets keyed by the runtime's quality tier and level |
+
+Low (quantum) keeps MSAA instead of the level's "off" until engine 1.36.2: engine 1.36.1 recolours fog, haze and translucent overlays without anti-aliasing.
 | `native/style.ts`, `assets/ui-style.json`, `tools/ui-style.css` | The UI style sheet (class-based CSS converted with `starhermit css`), tokens and the high-contrast token set |
 | `native/i18n.ts` | Locale from the runtime's interface language, `T()` over `js/strings.js` |
 | `native/classic.ts` | Loads the classic UMD scripts (`loadClassic`) with a `localStorage` shim over device storage, types for what the client reads |

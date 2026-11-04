@@ -79,6 +79,8 @@ export function lookFor(s: LevelSettings = levelSettings()): Look {
     shadows: s.shadows ? s.shadowMapSize : 0,
     bloom: s.bloom ? s.bloom.resolution : null,
     grade: s.grade,
-    antialias: s.antialias,
+    // Engine issue (1.36.1, reported 2026-11-04; fix due in 1.36.2): antialias "off" recolours fog,
+    // haze and translucent overlays, so Low keeps the MSAA it always had until that release.
+    antialias: s.antialias === "off" ? "msaa" : s.antialias,
   };
 }
