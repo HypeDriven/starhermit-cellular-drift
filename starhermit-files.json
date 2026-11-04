@@ -14,7 +14,7 @@
     "js/rules.js": {"sha256": "1d50c80c1a45053a48f67a8ccc85cacfb78d2c084f22640dbbcc049ad2c0274b", "size": 39021},
     "js/store.js": {"sha256": "d2c4ad6fb0132978bcaf3d422fbc24c21c3fa48896c91fe53aad73ba2595d38c", "size": 6593},
     "js/strings.js": {"sha256": "89f44986e4d39651f7aae70db4e72f1463c3f057d9ffbbf4ad322c60a9272ff4", "size": 41813},
-    "native/audio.ts": {"sha256": "c78dd7ca712078b5cd08f762a62fefb8465deb6e0b3606f283aab0cae02e67a5", "size": 7819},
+    "native/audio.ts": {"sha256": "2b54b7a6d2a7d9c50eef13e43f9563731ce10a8bea1d79986db4a42999642b2e", "size": 7727},
     "native/classic.ts": {"sha256": "e996ca83624fd02c1908dca75b39516677a1f022c5c7adfffa68c747e76be0fc", "size": 6163},
     "native/i18n.ts": {"sha256": "bd7ce6f4683ffe36dfce7334da035eb8e288751d79a6ca5907ba5061fd82af40", "size": 2552},
     "native/main.ts": {"sha256": "e1f65e56c7db67c156152f997c398c1c97db643ec1dfb95a42215b2931c50d5b", "size": 17575},

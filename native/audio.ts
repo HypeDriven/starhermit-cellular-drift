@@ -18,8 +18,9 @@
 // played while a sample loaded, and the low-passed noise bed under the
 // ambience loop (8 % once the loop played), are not ported: the engine's
 // browser runtime drops clip loads and plays while a synthesis graph runs
-// (the arrow-exodus port's finding). Clips load one at a time once the
-// mixer runs (natively at once, in a browser after the first press).
+// (the arrow-exodus port's finding). The clips all load at once in onStart;
+// the pad's notes render and the sound starts once the mixer runs (in a
+// browser after the first press).
 import { context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type Sound } from "starhermit:audio";
 
 const LEVEL = { music: 0.6, effects: 0.9, ambience: 0.5 };
@@ -42,8 +43,7 @@ const VARIANT = new Set(["ui", "absorb", "pellet", "absorbBig", "split", "eject"
 const clips = new Map<string, AudioClip>();
 let onCaption: ((key: string) => void) | null = null;
 let variantSeed = 1;
-let queue: string[] | null = null;
-let loading = false;
+let started = false;
 
 export function setOnCaption(cb: (key: string) => void): void { onCaption = cb; }
 export function setSeed(seed: number): void { variantSeed = (seed & 0x7fffffff) || 1; }
@@ -60,7 +60,7 @@ export function play(name: string): void {
   if (!clip) return;
   const bus: Bus = name === "ui" ? "interface" : "effects";
   try { playClip(clip, { bus, gain: LEVEL.effects, pitch }); }
-  catch { clips.delete(name); queue?.push(name); } // a clip the mixer lost: load it again
+  catch { /* the mixer is full this frame: skip it */ }
 }
 
 // -- the pad ----------------------------------------------------------------------------------
@@ -108,31 +108,24 @@ let ambience: Sound | null = null;
 let ambienceClip: AudioClip | null = null;
 
 export function setIntensity(v: number): void { intensity = Math.max(0, Math.min(1, v)); }
-/** Asks for the clips and the music; they start once the mixer runs (see update). */
+/** Loads every clip at once (onStart) and asks for the music; it starts once the mixer runs (see update).
+ * A cue whose clip is still loading is skipped (its caption still shows). */
 export function start(): void {
-  if (queue) return;
-  queue = [...Object.keys(SAMPLES), "ambience"];
+  if (started) return;
+  started = true;
   musicOn = true;
+  for (const [name, file] of Object.entries(SAMPLES)) {
+    loadClip(`sfx/${file}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
+  }
+  loadClip("sfx/ambience-medium.opus").then((c) => { ambienceClip = c; }, (e: unknown) => console.warn(`sfx ambience: ${String(e)}`));
 }
 /** Hidden window: the pad stops (the browser build's stopMusic); it resumes with resume(). */
 export function suspend(): void { musicOn = false; }
 export function resume(): void { musicOn = true; }
 
-function loadNext(): void {
-  if (loading || !queue || !queue.length) return;
-  const name = queue.shift()!;
-  loading = true;
-  const path = name === "ambience" ? "sfx/ambience-medium.opus" : `sfx/${SAMPLES[name]}.opus`;
-  loadClip(path).then((c) => {
-    if (name === "ambience") ambienceClip = c;
-    else clips.set(name, c);
-  }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`)).finally(() => { loading = false; });
-}
-
-/** Each frame: the next clip to load, one rendered pad note a frame, the ambience loop, then the pad's step every 420 ms. */
+/** Each frame once the mixer runs: one rendered pad note a frame, the ambience loop, then the pad's step every 420 ms. */
 export function update(): void {
-  if (context.state !== "running" || !queue) return;
-  loadNext();
+  if (context.state !== "running" || !started) return;
   try {
     for (let d = 0; d < DURS.length; d++) {
       if (notes[d]!.length < NOTE_COUNT) {
@@ -144,7 +137,7 @@ export function update(): void {
     }
     if (drones.length < DURS.length) { drones.push(droneClip(DURS[drones.length]!)); return; }
     if (ambienceClip && !ambience) { ambience = playClip(ambienceClip, { bus: "effects", gain: 0.8 * LEVEL.ambience, loop: true }); return; }
-  } catch (e) { console.warn(`audio: ${String(e)}`); queue = []; return; }
+  } catch (e) { console.warn(`audio: ${String(e)}`); return; }
   if (!musicOn) return;
   const now = context.currentTime;
   if (now < nextStep) return;
