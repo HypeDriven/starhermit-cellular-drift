@@ -196,18 +196,18 @@ The colour-vision-safe palette (the game's setting) replaces membrane/player/bar
 
 **Motion.** Membranes breathe ±2 %, motes pulse ±12 %, barbs spin 0.35 rad/s, plankton drift 0.008 rad/s, the marker pulses ±8 %, the caustic shimmer drifts. Vanished entities pop into 4 (mote) or 14 (cell) soft particles from a pool bounded by the budget. The runtime's Reduced motion removes breathing, pulses, spin, drift, caustic motion and shake and caps bursts at 3.
 
-**Graphics levels.** The runtime's Graphics options (Auto or a level) give `frame().quality` and `levelIndex`; `native/quality.ts` maps them to the browser build's presets:
+**Graphics levels.** The runtime's Graphics options (Auto or a level) give the frame's level; the engine-owned effects are the level's own (`levelSettings()`, the table every StarHermit game reads) and `native/quality.ts` maps the level's quality tier to the browser build's art presets. At each tier's anchor level (quantum, molecular, terrestrial, galactic):
 
 | | Low | Balanced | High | Ultra |
 |---|---|---|---|---|
-| Key-light shadow map | off | 1024 | 2048 | 4096 (held to the level's size) |
-| Bloom (model "r160", the page's strength 0.45, radius 0.2, threshold 0.9) · grade | – | on | on | on |
-| Anti-aliasing | MSAA | FXAA | SMAA | MSAA |
+| Key-light shadow map (the level's size; atomic 0, planetary and up 4096) | off | 1024 | 2048 | 4096 |
+| Bloom (model "r160", the page's strength 0.45, radius 0.2, threshold 0.9) at the level's resolution · grade (atomic and up) | – | ½ · on | ½ · on | full · on |
+| Anti-aliasing (the level's) | off | FXAA | SMAA | MSAA |
 | Reflections (room environment) | – | on | on | on |
 | Caustic shimmer · detailed floor (lamp pool, ghost walls, glass light, grain) | – | on | on | on |
 | Floor texture (detailed; plain = half) | 512 | 1024 | 1024 | 2048 |
 | Membrane segments · material | 16×10 Lambert | 24×16 standard | 28×20 physical | 40×28 physical |
-| Burst particles · plankton (×1.64 per level above the tier's first, ≤ 4×, Particles cap 300/60 or 1200/480) | 200 · 50 | 500 · 120 | 900 · 200 | 1200 · 320 |
+| Burst particles · plankton (× the level's particle budget over the anchor's, ≤ 4×, Particles cap 300/60 or 1200/480) | 200 · 50 | 500 · 120 | 900 · 200 | 1200 · 320 |
 
 The grade is linear (the page's pass before OutputPass): S-curve 0.22, saturation 1.1, cool shadows / warm highlights (split 0.25–0.85), levels 0.99 / +0.003, light past 1 kept, vignette 0.26 (0.38–0.9, scale 1 × 0.9). Render scale, resolution, adaptive resolution, the frame-rate limit and readout belong to the runtime.
 

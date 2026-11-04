@@ -1,0 +1,19 @@
+# Tier bench (tools/engine-tier-bench.mjs): Learn › Barbs, left alone (a seeded
+# dish with no rivals, so the idle cell survives however the windowed run's
+# ticks fall against its frames): 600 measured frames of the live dish
+# (barbs, motes, pellets, plankton, the caustic floor, shadows and bloom).
+until 300 Play
+frames 30
+click Play
+until 60 Choose a mode
+frames 10
+click Learn
+until 60 Barbs
+frames 10
+click Barbs
+until 30 Rank 1/1
+frames 120
+measure start
+frames 600
+measure stop
+expect Mass 20 / 90

@@ -570,7 +570,7 @@ export function applyLook(next: Look): void {
   const shadows = next.shadows > 0;
   renderer.shadowMap.enabled = shadows;
   key.castShadow = shadows;
-  if (shadows) key.shadow.mapSize = next.shadows;
+  if (shadows) key.shadow.mapSize = next.shadows; // the level's size (since minor 23 the engine keeps the game's)
   key.shadow.radius = next.shadows >= 4096 ? 3 : 2;
   updateEnvironment();
   const [ws, hs] = next.budget.cellSegments;
@@ -581,7 +581,7 @@ export function applyLook(next: Look): void {
   // Post effects, as the browser build's composer chain per preset. High
   // threshold: only emissive motes, rims, the marker and hint rings and glints bloom.
   // The page's r160 UnrealBloomPass exactly (model "r160", strength 0.45 as written).
-  renderer.bloom = next.bloom ? { model: "r160", strength: 0.45, radius: 0.2, threshold: 0.9 } : null;
+  renderer.bloom = next.bloom === null ? null : { model: "r160", strength: 0.45, radius: 0.2, threshold: 0.9, resolution: next.bloom };
   // The grade pass before OutputPass (linear light): 0.22 of a smoothstep S-curve, +10 % saturation,
   // cool shadows / warm highlights (split 0.25–0.85), the s * 0.99 + 0.003 lift, light past 1 kept
   // (mix(c, s + max(c - 1, 0), amount)), vignette 0.26 from 0.38 to 0.9.
