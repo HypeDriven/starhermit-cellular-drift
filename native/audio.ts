@@ -13,15 +13,13 @@
 // gain. The voice bus played nothing and is gone.
 //
 // The browser build made the pad and its stand-in synth with Web Audio
-// oscillators; here the pad's notes are rendered once into clips
-// (createClip) with the same envelopes, and the synthesized stand-ins it
-// played while a sample loaded, and the low-passed noise bed under the
-// ambience loop (8 % once the loop played), are not ported: the engine's
-// browser runtime drops clip loads and plays while a synthesis graph runs
-// (the arrow-exodus port's finding). The clips all load at once in onStart;
-// the pad's notes render and the sound starts once the mixer runs (in a
-// browser after the first press).
-import { context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type Sound } from "starhermit:audio";
+// oscillators; here the pad's notes are offline graphs rendered once into clips
+// with the same envelopes, and the synthesized stand-ins it played while a
+// sample loaded, and the low-passed noise bed under the ambience loop (8 % once
+// the loop played), are not ported. The clips load and the notes render at once
+// in onStart; the sound starts once the mixer runs (in a browser after the
+// first press).
+import { OfflineAudioContext, context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type GainNode, type Sound } from "starhermit:audio";
 
 const LEVEL = { music: 0.6, effects: 0.9, ambience: 0.5 };
 const SAMPLES: Record<string, string> = {
@@ -67,38 +65,46 @@ export function play(name: string): void {
 const RATE = 22050;
 const SCALE = [0, 3, 5, 7, 10, 12, 15]; // minor pentatonic over the root
 const ROOT = 196; // G3
-/** A blip's envelope: 0.0001 → 1 over 12 ms, then down to 0.0001 by `dur` (exponential ramps). */
-function env(t: number, dur: number): number {
-  if (t < 0.012) return 0.0001 * Math.pow(1 / 0.0001, t / 0.012);
-  if (t > dur) return 0;
-  return Math.pow(0.0001, (t - 0.012) / (dur - 0.012));
+/** A blip's envelope at `level`: 0.0001 → 1 over 12 ms, then down to 0.0001 by `dur` (exponential ramps). */
+function env(off: OfflineAudioContext, level: number, dur: number): GainNode {
+  const g = off.createGain();
+  g.gain.setValueAtTime(0.0001 * level, 0);
+  g.gain.exponentialRampToValueAtTime(level, 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001 * level, dur);
+  return g;
+}
+function voice(off: OfflineAudioContext, type: "sine" | "triangle", f: number, g: GainNode, dur: number): void {
+  const osc = off.createOscillator();
+  osc.type = type; osc.frequency.value = f;
+  osc.connect(g).connect(off.destination);
+  osc.start(); osc.stop(dur);
 }
 /** One pad note: the sine at `freq` (gain 1) and its overtone at 2.01× (gain 0.3, 0.8 of the length). */
-function noteClip(freq: number, dur: number): AudioClip {
-  const n = Math.round((dur + 0.03) * RATE);
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const t = i / RATE;
-    out[i] = Math.sin(2 * Math.PI * freq * t) * env(t, dur) + 0.3 * Math.sin(2 * Math.PI * freq * 2.01 * t) * env(t, dur * 0.8);
-  }
-  return createClip([out], RATE);
+async function renderNote(freq: number, dur: number): Promise<AudioClip> {
+  const off = new OfflineAudioContext(1, Math.round((dur + 0.03) * RATE), RATE);
+  voice(off, "sine", freq, env(off, 1, dur), dur);
+  voice(off, "sine", freq * 2.01, env(off, 0.3, dur * 0.8), dur * 0.8);
+  return createClip(await off.startRendering());
 }
 /** The drone: a triangle at half the root. */
-function droneClip(dur: number): AudioClip {
-  const n = Math.round((dur + 0.03) * RATE);
-  const out = new Float32Array(n);
-  const f = ROOT / 2;
-  for (let i = 0; i < n; i++) {
-    const t = i / RATE;
-    const ph = (f * t) % 1;
-    out[i] = (1 - 4 * Math.abs(ph - 0.5)) * env(t, dur);
-  }
-  return createClip([out], RATE);
+async function renderDrone(dur: number): Promise<AudioClip> {
+  const off = new OfflineAudioContext(1, Math.round((dur + 0.03) * RATE), RATE);
+  voice(off, "triangle", ROOT / 2, env(off, 1, dur), dur);
+  return createClip(await off.startRendering());
 }
 // Two lengths, as the browser build's 1.6 − 0.7 × intensity: calm (≈1.5 s) and tense (0.9 s).
 const DURS = [1.46, 0.9];
 const notes: AudioClip[][] = [[], []]; // [length][degree * 2 + octave]
 const drones: AudioClip[] = [];
+/** Every note, one graph at a time (at most 16 may render at once); the drones last, as update() waits on them. */
+async function renderPad(): Promise<void> {
+  for (let d = 0; d < DURS.length; d++) {
+    for (let i = 0; i < NOTE_COUNT; i++) {
+      notes[d]!.push(await renderNote(ROOT * Math.pow(2, SCALE[i >> 1]! / 12) * (i & 1 ? 0.5 : 1), DURS[d]!));
+    }
+  }
+  for (const dur of DURS) drones.push(await renderDrone(dur));
+}
 const NOTE_COUNT = SCALE.length * 2;
 let intensity = 0;
 let stepIdx = 0;
@@ -117,25 +123,18 @@ export function start(): void {
   for (const [name, file] of Object.entries(SAMPLES)) {
     loadClip(`sfx/${file}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
   }
+  void renderPad().catch((e: unknown) => console.warn(`audio: ${String(e)}`));
   loadClip("sfx/ambience-medium.opus").then((c) => { ambienceClip = c; }, (e: unknown) => console.warn(`sfx ambience: ${String(e)}`));
 }
 /** Hidden window: the pad stops (the browser build's stopMusic); it resumes with resume(). */
 export function suspend(): void { musicOn = false; }
 export function resume(): void { musicOn = true; }
 
-/** Each frame once the mixer runs: one rendered pad note a frame, the ambience loop, then the pad's step every 420 ms. */
+/** Each frame once the mixer runs and the pad is rendered: the ambience loop, then the pad's step every 420 ms. */
 export function update(): void {
   if (context.state !== "running" || !started) return;
+  if (drones.length < DURS.length) return;
   try {
-    for (let d = 0; d < DURS.length; d++) {
-      if (notes[d]!.length < NOTE_COUNT) {
-        const i = notes[d]!.length;
-        const degree = SCALE[i >> 1]!;
-        notes[d]!.push(noteClip(ROOT * Math.pow(2, degree / 12) * (i & 1 ? 0.5 : 1), DURS[d]!));
-        return;
-      }
-    }
-    if (drones.length < DURS.length) { drones.push(droneClip(DURS[drones.length]!)); return; }
     if (ambienceClip && !ambience) { ambience = playClip(ambienceClip, { bus: "effects", gain: 0.8 * LEVEL.ambience, loop: true }); return; }
   } catch (e) { console.warn(`audio: ${String(e)}`); return; }
   if (!musicOn) return;

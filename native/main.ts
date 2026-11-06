@@ -43,7 +43,6 @@ export const app = {
   results: null as ResultsView | null,
   /** The caption strip: hints, refused actions, and (with Captions on) sound cues. */
   caption: null as { text: string; until: number } | null,
-  toast: null as { text: () => string; until: number } | null,
 };
 export let game: State | null = null;
 export let paused = false;
@@ -60,10 +59,12 @@ let hintUntil = 0;
 let lastDangerTick = -1e9;
 let prevStats: { motes: number; pellets: number; rivalCells: number; splits: number; ejects: number; barbBursts: number; merges: number } | null = null;
 
-/** A toast; `text` re-runs each frame so a visible toast follows a language change. */
-export function toast(text: () => string, seconds = 3.5): void {
-  app.toast = { text, until: now() + seconds };
-  ui.announce(text());
+/** One toast at a time; over the results / pause screens the bottom holds their buttons, so it shows at the top. */
+let shownToast: ui.Toast | null = null;
+export function toast(text: string, seconds = 3.5): void {
+  shownToast?.dismiss();
+  const top = app.screen === "result" || app.screen === "pause";
+  shownToast = ui.toast!(text, { duration: seconds, style: ["toast", "toast-text"], dismissible: false, position: top ? "top" : "bottom", offset: top ? 0 : 8 });
 }
 function caption(text: string, seconds: number): void {
   app.caption = { text, until: now() + seconds };
@@ -376,7 +377,7 @@ onStart(() => {
 });
 onPreferencesChange(() => applySettings());
 platform.onSettingsChange(() => applySettings());
-onSessionEnded(() => { toast(() => T("Signed out of StarHermit — progress keeps saving on this device.")); });
+onSessionEnded(() => { toast(T("starhermit.signedOut")); });
 onSuspend(() => {
   // backgrounding pauses the round and silences the pad
   pauseGame();
@@ -401,7 +402,6 @@ onUpdate((dt) => {
   audio.update();
   const t = now();
   if (hintUntil && t > hintUntil) { render.setHint(null); hintUntil = 0; }
-  if (app.toast && t > app.toast.until) app.toast = null;
   if (app.caption && t > app.caption.until) app.caption = null;
   if (app.screen === "hud" && ui.focused()) ui.setFocus(null);
 });

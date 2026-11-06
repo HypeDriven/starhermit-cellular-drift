@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import vm from 'node:vm';
-import { loadTables, codeKeys, audit } from './i18n-common.mjs';
+import { codeKeys, audit } from './i18n-common.mjs';
 
 const ROOT = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), 'utf8');
@@ -35,14 +35,10 @@ export function usedKeys() {
   for (const c of C.CHALLENGES) { keys.add(c.name); if (c.description) keys.add(c.description); }
   for (const m of read('js/rules.js').matchAll(/text: '((?:[^'\\]|\\.)*)'/g)) keys.add(m[1].replace(/\\'/g, "'"));
   for (const m of read('js/rules.js').matchAll(/text: \w+ \? '((?:[^'\\]|\\.)*)' : '((?:[^'\\]|\\.)*)'/g)) { keys.add(m[1]); keys.add(m[2]); }
-  return [...keys].filter((k) => /[A-Za-z]/.test(k)).sort();
+  return [...keys].filter((k) => /[A-Za-z]/.test(k) && !k.startsWith('starhermit.')).sort();
 }
 
 test('every used key is translated in every locale; placeholders intact', () => {
-  assert.deepEqual(audit(loadTables(ROOT, 'js/strings.js', 'CD_STRINGS'), usedKeys()), []);
+  assert.deepEqual(audit(JSON.parse(read('assets/strings.json')), usedKeys()), []);
 });
 
-test('the native client picks the nearest shipped locale', () => {
-  const src = read('native/i18n.ts');
-  for (const loc of ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT']) assert.ok(src.includes(`"${loc}"`), loc);
-});

@@ -26,11 +26,9 @@ import {
 // ------------------------------------------------------------------ layout
 interface Layout { lw: number; lh: number; sc: number; ox: number; oy: number; narrow: boolean; short: boolean }
 function layoutNow(): Layout {
-  const f = frame();
-  const sc = ui.preferences().scale;
-  const sa = f.safeArea;
-  const lw = Math.max(1, (f.width - sa.left - sa.right) / sc), lh = Math.max(1, (f.height - sa.top - sa.bottom) / sc);
-  return { lw, lh, sc, ox: sa.left / sc, oy: sa.top / sc, narrow: lw <= 600, short: lh <= 520 };
+  const v = ui.viewport!();
+  const sc = v.scale, lw = Math.max(1, v.width), lh = Math.max(1, v.height);
+  return { lw, lh, sc, ox: v.x, oy: v.y, narrow: lw <= 600, short: lh <= 520 };
 }
 const lastHeight = new Map<string, number>();
 
@@ -170,15 +168,6 @@ export function drawScreens(): void {
       para(app.caption!.text, w - 24, "captions-text", "caption-text", true);
     }, { style: "captions" });
   }
-  if (app.toast) {
-    const text = app.toast.text();
-    // over the results / pause screens the bottom holds their buttons: the toast shows at the top
-    const top = app.screen === "result" || app.screen === "pause";
-    const w = Math.min(L.lw - 32, 34 * 16);
-    ui.place("toast", top ? { anchor: "top", y: 12 } : { anchor: "bottom", y: 24 }, () => {
-      ui.column("toast-box", () => { para(text, w - 40, "toast-text", "toast-text", true); }, { style: "toast", align: "center" });
-    });
-  }
 }
 const JOURNEY = C.journeyStages();
 
@@ -283,14 +272,14 @@ function titleScreen(L: Layout): void {
     const link = platform.inviteLink();
     if (link) {
       list.push({
-        id: "btn-invite", text: T("Invite a friend"),
+        id: "btn-invite", text: T("starhermit.invite"),
         act: () => {
-          try { clipboard.writeText(link); toast(() => T("Invite link copied — send it to a friend.")); }
-          catch { toast(() => T("Could not copy the invite link."), 6); }
+          try { clipboard.writeText(link); toast(T("starhermit.inviteCopied")); }
+          catch { toast(T("starhermit.inviteLink", { link }), 6); }
         },
       });
     }
-    if (!platform.signedIn()) list.push({ id: "btn-sign-in", text: T("Sign in with StarHermit"), act: () => { void requestSignIn().catch(() => undefined); } });
+    if (!platform.signedIn()) list.push({ id: "btn-sign-in", text: T("starhermit.signIn"), act: () => { void requestSignIn().catch(() => undefined); } });
     stack("title-actions", list, itemW(w));
   }, null, { title: true });
 }
@@ -448,8 +437,8 @@ function resultScreen(L: Layout): void {
     }
     if (res.lb) {
       const lb = res.lb;
-      para(lb.pending ? T("Posting score to the leaderboard…") : !lb.posted ? T("Score not posted to the leaderboard.")
-        : lb.rank ? T("Leaderboard rank: #{rank}", { rank: lb.rank }) : T("Score posted to the leaderboard."), w, "sub", "result-lb", true);
+      para(lb.pending ? T("starhermit.leaderboardPosting") : !lb.posted ? T("starhermit.leaderboardNotPosted")
+        : lb.rank ? T("starhermit.leaderboardRank", { rank: lb.rank }) : T("starhermit.leaderboardPosted"), w, "sub", "result-lb", true);
     }
   }, (w) => {
     const iw = itemW(w);

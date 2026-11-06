@@ -1,31 +1,20 @@
 // The browser build's pure game scripts, unchanged and shared with the Node
 // tests: rng, rules, content, store (the save document, its cross-device
-// merge and the device's round board), the string tables (js/*.js, UMD) and
+// merge and the device's round board) (js/*.js, UMD) and
 // js/migrate.js (the engine save document and what the browser build left
 // in the account), evaluated as classic scripts so their globals (CDRNG,
-// CDRules, CDContent, CDStore, CD_STRINGS, CDMigrate) are this module's
+// CDRules, CDContent, CDStore, CDMigrate) are this module's
 // exports.
 //
 // js/store.js keeps the device's local round board in `localStorage`: here
-// that is a small shim over the device's starhermit:storage, installed
+// that is the engine's, over the device's starhermit:storage, installed
 // before the scripts run. Progress is the game's save (platform.ts).
-import { storage } from "starhermit:storage";
+import { installLocalStorage } from "starhermit:storage";
 import { loadClassic } from "starhermit:script";
 
-const shim = {
-  getItem(key: string): string | null {
-    try { return storage.getText(key); } catch { return null; }
-  },
-  setItem(key: string, value: string): void {
-    try { storage.set(key, String(value)); } catch (e) { console.warn(`storage ${key}: ${String(e)}`); }
-  },
-  removeItem(key: string): void {
-    try { storage.remove(key); } catch { /* gone */ }
-  },
-};
-(globalThis as unknown as { localStorage: typeof shim }).localStorage = shim;
+installLocalStorage();
 
-for (const f of ["js/rng.js", "js/rules.js", "js/content.js", "js/store.js", "js/strings.js", "js/migrate.js"]) loadClassic(f);
+for (const f of ["js/rng.js", "js/rules.js", "js/content.js", "js/store.js", "js/migrate.js"]) loadClassic(f);
 
 // -- The shapes this client reads -------------------------------------------------
 export type GoalType = "reach-marker" | "reach-mass" | "eject-count" | "split-then-mass" | "absorb-cells" | "survive";
@@ -104,10 +93,8 @@ interface MigrateApi {
 
 const g = globalThis as unknown as {
   CDRules: RulesApi; CDContent: ContentApi; CDStore: StoreApi; CDMigrate: MigrateApi;
-  CD_STRINGS: Record<string, Record<string, string>>;
 };
 export const Rules = g.CDRules;
 export const Content = g.CDContent;
 export const Store = g.CDStore;
 export const Migrate = g.CDMigrate;
-export const STRINGS = g.CD_STRINGS;

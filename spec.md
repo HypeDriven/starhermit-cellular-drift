@@ -30,11 +30,11 @@ This document describes Cellular Drift as it ships today: a StarHermit engine sc
 | `native/platform.ts` | Save, conflict merge and the browser build's foreign save; game settings and legacy settings migration; device board; platform clock; player, invite link; score posting |
 | `native/quality.ts` | The browser build's graphics presets and budgets keyed by the runtime's quality tier and level |
 | `native/style.ts`, `assets/ui-style.json`, `tools/ui-style.css` | The UI style sheet (class-based CSS converted with `starhermit css`), tokens and the high-contrast token set |
-| `native/i18n.ts` | Locale from the runtime's interface language, `T()` over `js/strings.js` |
-| `native/classic.ts` | Loads the classic UMD scripts (`loadClassic`) with a `localStorage` shim over device storage, types for what the client reads |
+| `native/i18n.ts` | The engine's `strings` tables in the runtime's interface language, `T()`; account lines are `starhermit.*` |
+| `native/classic.ts` | Loads the classic UMD scripts (`loadClassic`) with the engine's `localStorage` over device storage, types for what the client reads |
 | `js/rng.js`, `js/rules.js`, `js/content.js`, `js/store.js` | Unchanged browser-build rules engine, content, save document and merge (UMD; shared with the Node tests) |
 | `js/migrate.js` | The engine save document and the browser build's account data (foreign save, legacy settings) as the engine client takes them over |
-| `js/strings.js` | Translation tables (English text is the key) for the nine locales |
+| `assets/strings.json` | Translation tables (English text is the key) for the nine locales |
 | `sfx/` | 18 Opus clips; `manifest.txt` (canonical), `manifest.json`, `manifest.md` |
 | `assets/` | `title-backdrop.webp`, `results-vignette.webp`, `ui-style.json` |
 | `cover.jpg`, `coverart.png`, `icon.png` | Platform cover, cover art, icon |
@@ -217,7 +217,7 @@ The grade is linear (the page's pass before OutputPass): S-curve 0.22, saturatio
 
 **Mix.** The runtime's buses: music (the pad, at the old 60 % bus level), effects (event clips at 90 %, ambience loop at 0.8 × 50 %), interface (the menu tick). Volumes, mute and the voice limit are the runtime's Options. In browsers sound starts after the first press. Clips load one at a time once the mixer runs.
 
-**Music.** A minor-pentatonic pad over G3 stepping every 420 ms (degree `(3s + s>>2) mod 7`, an octave down on steps 4–7 of 8), rendered once into clips (sine + 2.01× overtone, 12 ms attack, exponential decay) in a calm (1.46 s) and a tense (0.9 s) length; gain `0.07 + 0.05·intensity`; a triangle drone at G2 every other step above intensity 0.45. Intensity is 1 while the hint says flee, else `0.2 + 0.5·mass/goal`, updated every 15 ticks. The pad stops while the window is hidden.
+**Music.** A minor-pentatonic pad over G3 stepping every 420 ms (degree `(3s + s>>2) mod 7`, an octave down on steps 4–7 of 8), rendered offline once into clips (sine + 2.01× overtone, 12 ms attack, exponential decay) in a calm (1.46 s) and a tense (0.9 s) length; gain `0.07 + 0.05·intensity`; a triangle drone at G2 every other step above intensity 0.45. Intensity is 1 while the hint says flee, else `0.2 + 0.5·mass/goal`, updated every 15 ticks. The pad stops while the window is hidden.
 
 **Ambience.** `ambience-medium.opus`, a 12 s loop, from the first unlocked frame.
 
@@ -244,7 +244,7 @@ Pitch variants (±6 %) come from an LCG seeded by the round seed. Captions: with
 
 ## 10. Localization
 
-Nine locales: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**. The locale is the runtime's interface language (`preferences().language`: the player's choice in Options › Language, else the account's preferred language or the device's), mapped to the nearest shipped locale (`es-MX → es-419`, `en-AU → en-GB`, `pt-PT → pt-BR`), and follows changes live (the UI is rebuilt every frame). `js/strings.js` holds one row per English key with es-419, de-DE, fr-FR, pt-BR and it-IT; en-GB, es-ES and fr-CA list only their differences; `T()` falls back regional → parent → English and fills `{name}` placeholders. Every player-facing string goes through it, including content names and briefs, hint texts, refused-action reasons, captions, account, invite and leaderboard lines. "Cellular Drift" and rival names stay as they are. `tests/i18n.test.mjs` collects every key from `native/*.ts` (`T(…)`, `N(…)`), the captions, the content and the rules' hints, and fails when a locale lacks one or a translation drops a placeholder.
+Nine locales: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**. The locale is the runtime's interface language (`preferences().language`: the player's choice in Options › Language, else the account's preferred language or the device's), read along the engine's locale chain (`es-MX → es-419`, `en-AU → en-GB`, `pt-PT → pt-BR`), and follows changes live (the UI is rebuilt every frame). `js/strings.js` holds one row per English key with es-419, de-DE, fr-FR, pt-BR and it-IT; en-GB, es-ES and fr-CA list only their differences; `T()` falls back regional → parent → English and fills `{name}` placeholders. Every player-facing string goes through it, including content names and briefs, hint texts, refused-action reasons, captions, account, invite and leaderboard lines. "Cellular Drift" and rival names stay as they are. `tests/i18n.test.mjs` collects every key from `native/*.ts` (`T(…)`, `N(…)`), the captions, the content and the rules' hints, and fails when a locale lacks one or a translation drops a placeholder.
 
 ## 11. Accessibility
 
@@ -265,7 +265,7 @@ Nine locales: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**
 | Game settings | `settings` (game.captions, game.cvdPalette, game.theme), synced with the account |
 | Options | volumes, mute, voice limit, graphics level, frame rate, language, controls, accessibility: the runtime's menu (Options buttons call `openMenu`) |
 | Platform clock | the daily's day from `serverNow()` (read at start and on player change), the device's UTC date while unknown |
-| Leaderboard | signed in, every finished round outside Learn posts its total through `score-script.js` (a practice session whose socket sends `{ type: 'result', scores: { 'high-score': total } }`); the results show posting / rank #N / posted / not posted |
+| Leaderboard | signed in, every finished round outside Learn posts its total through `score-script.js` (`leaderboards.submitScore`, which sends `{ type: 'result', scores: { 'high-score': total } }`); the results show posting / rank #N / posted / not posted |
 | Invite | signed in, Invite a friend copies `inviteLink()` with the clipboard capability |
 | Device round board | every round goes to `cellulardrift.leaderboards.v1` in device storage (newest 200) |
 | Achievements | local (six keys in the progress); no platform achievements |
