@@ -1,0 +1,98 @@
+{
+  "game": {
+    "id": "1e05b344-9e01-405f-9e70-1ffce00a1254",
+    "displayName": "Cellular Drift",
+    "hosting": {
+      "hostingEnabled": true,
+      "hostedUrl": "https://1e05b344-9e01-405f-9e70-1ffce00a1254.starhermit.com/index.html",
+      "deployStatus": "live",
+      "pinnedCommitSha": null,
+      "deployedCommitSha": null,
+      "deployError": null,
+      "deployedAt": "2026-11-12T08:13:15.814355+00:00",
+      "externalLaunchUrl": null,
+      "engineVersion": "1.38.0",
+      "deployWarning": null
+    }
+  },
+  "publishedAt": "2026-11-12T08:13:20.529Z",
+  "sourceCommit": "c99f83022d91255ce10cddc6a3562cf1d42bfca6",
+  "bytesReceived": 1925487,
+  "archiveSha256": "89b1c512a173b26c3f2a58c90d92a7ec055e5b0e0042b39e69a63b222328b784",
+  "indexSha256": "1a368c14052af4b7a75fc4187ccb8749a3dfad91a07635bc1caa0f1e720d8f41",
+  "result": {
+    "clientPublished": true,
+    "serverImageLoaded": false,
+    "imageDigest": null,
+    "bytesReceived": 1925487,
+    "mode": "replace",
+    "filesRemoved": 0,
+    "engineVersion": "1.38.0",
+    "deployWarning": null
+  },
+  "liveVerification": {
+    "at": "2026-11-12T08:13:20.529Z",
+    "files": [
+      {
+        "file": "starhermit-files.json",
+        "sha256": "1a368c14052af4b7a75fc4187ccb8749a3dfad91a07635bc1caa0f1e720d8f41",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/Japanese.otf",
+        "sha256": "8cad40e9aafde0ceaf66d8f99c4a24cc3bc993f73af0be08257fbe763b29bc55",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/Khmer.ttf",
+        "sha256": "e25015d968c877af37231254fbf170cd14e7343d9a589317848a37f569143527",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/SimplifiedChinese.otf",
+        "sha256": "90f0208179b8abd2fbb5532ddc5b2e6d91edc912316d4e51367a418f3f2df663",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/Tamil.ttf",
+        "sha256": "4fbf5e095b553d187bf1dfc6527ba26ebcb33f794d9933d215963b6b5af307c1",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/TraditionalChinese.otf",
+        "sha256": "1fb8f3002bf6e91c0f1806004f7637a7517d05ca7805aeb75734912f067ea7b7",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/common.json",
+        "sha256": "e29b97319e0de1affe1787e4cf73fb755254b1e9697ce5a8f187b9d4128493c9",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/fonts.json",
+        "sha256": "37beaea0dba54c9f2c45995cbf9fd19fad21719d701718c41d7e58dd7748ca13",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/locales.json",
+        "sha256": "72e6e0c9ac7078e066b7f9c1862ee74886a7b7c8052617260a5764f9a0061650",
+        "status": 200
+      },
+      {
+        "file": "assets/strings.json",
+        "sha256": "ccbc2e8f50a2e49443ed3f11bf66fb3b74d55468582c0b0ee65ce994448705e6",
+        "status": 200
+      },
+      {
+        "file": "index.html",
+        "sha256": "e25d9806a05896a515bbc7e7cf4121a446c98119445610b9b93a6f2867827874",
+        "status": 200
+      },
+      {
+        "file": "starhermit.txt",
+        "sha256": "62dc262840304ec4a9e9125bad96b24997c6fdcf309dfc713e49ec6d4408b783",
+        "status": 200
+      }
+    ]
+  }
+}
