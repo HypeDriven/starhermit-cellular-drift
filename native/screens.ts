@@ -1,3 +1,6 @@
+import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
+// localization-runtime:attached
+import { openLocalizedOptions as __l10nOptions } from "./l10n/menu.ts";
 // The browser build's DOM shell (js/app.js buildUI + css/style.css) as
 // starhermit:ui, built every frame: the play HUD (objective and progress at
 // the top-left, Pause at the top-right, the Split / Eject / Hint tray at the
@@ -8,7 +11,17 @@
 // the vignette art and the score breakdown). Screens centre their column
 // when it fits and scroll it (the Back / Retry buttons pinned below) when
 // it does not, as the browser build's auto margins did.
-import { clipboard, frame, openMenu } from "starhermit:engine";
+// The browser build's DOM shell (js/app.js buildUI + css/style.css) as
+// starhermit:ui, built every frame: the play HUD (objective and progress at
+// the top-left, Pause at the top-right, the Split / Eject / Hint tray at the
+// bottom-right, the caption strip above it), the toast, and the screens over
+// a dark scrim (the title over its key art, Help, the mode select, the
+// lesson / Journey / practice / challenge lists with their done marks and
+// stars, the daily setup, pause with the game's own options, results with
+// the vignette art and the score breakdown). Screens centre their column
+// when it fits and scroll it (the Back / Retry buttons pinned below) when
+// it does not, as the browser build's auto margins did.
+import { clipboard, frame } from "starhermit:engine";
 import { bindings } from "starhermit:input";
 import * as draw from "starhermit:draw";
 import * as ui from "starhermit:ui";
@@ -40,7 +53,7 @@ function para(text: string, width: number, cls?: string | readonly string[] | nu
   if (!text) return;
   const styles: (string | ui.Style)[] = cls ? (typeof cls === "string" ? [cls] : [...cls]) : [];
   if (center) styles.push({ text: { align: "center" } });
-  let u = ui.style(...styles);
+  let u = ui.style(...__l10nStyle(styles));
   if (id) u = u.id(id);
   if (ui.measureText(text, { style: styles }).width / ui.preferences().scale <= width) u.label(text);
   else u.paragraph(text, width);
@@ -63,7 +76,7 @@ function button(b: Btn, width: number): void {
       }, { align: "center", spacing: 2 });
     };
   }
-  if (ui.style(...style, { width }).id(b.id).button(b.text, opts)) { if (!b.quiet) audio.play("ui"); b.act(); }
+  if (ui.style(...__l10nStyle(style), __l10nStyle({ width })).id(b.id).button(b.text, opts)) { if (!b.quiet) audio.play("ui"); b.act(); }
 }
 function stack(key: string, list: Btn[], width: number): void {
   ui.column(key, () => { for (const b of list) button(b, width); }, { spacing: 12, width, align: "center" });
@@ -212,7 +225,7 @@ function hud(L: Layout): void {
   }, { spacing: 4 });
   if (play) {
     const r = ui.place("hud-pause", { anchor: "top-end", x: pad, y: pad + info.height / L.sc + 12 }, () => {
-      if (ui.style("btn", "btn-act").id("btn-pause").button(T("Pause"))) pauseGame();
+      if (ui.style(__l10nStyle("btn"), __l10nStyle("btn-act")).id("btn-pause").button(T("Pause"))) pauseGame();
     });
     hudBlocks.push(r);
   }
@@ -220,9 +233,9 @@ function hud(L: Layout): void {
   // the thumb-zone tray, bottom-right
   const r = ui.place("hud-actions", { anchor: "bottom-end", x: pad, y: pad }, () => {
     ui.row("hud-tray", () => {
-      if (ui.style("btn", "btn-act").id("btn-split").button(T("Split"), { disabled: !legal.split.ok })) doAction("split");
-      if (ui.style("btn", "btn-act").id("btn-eject").button(T("Eject"), { disabled: !legal.eject.ok })) doAction("eject");
-      if (ui.style("btn", "btn-act").id("btn-hint").button(T("Hint"))) showHint();
+      if (ui.style(__l10nStyle("btn"), __l10nStyle("btn-act")).id("btn-split").button(T("Split"), { disabled: !legal.split.ok })) doAction("split");
+      if (ui.style(__l10nStyle("btn"), __l10nStyle("btn-act")).id("btn-eject").button(T("Eject"), { disabled: !legal.eject.ok })) doAction("eject");
+      if (ui.style(__l10nStyle("btn"), __l10nStyle("btn-act")).id("btn-hint").button(T("Hint"))) showHint();
     }, { spacing: 8, align: "center" });
   });
   hudBlocks.push(r);
@@ -257,17 +270,17 @@ function screen(key: string, L: Layout, maxW: number, body: (w: number) => void,
 }
 const ITEM_W = 420;
 const itemW = (w: number): number => Math.min(ITEM_W, w);
-function h2(text: string, id: string): void { ui.style("h2").id(id).heading(text); }
+function h2(text: string, id: string): void { ui.style(__l10nStyle("h2")).id(id).heading(text); }
 
 function titleScreen(L: Layout): void {
   screen("title", L, 560, (w) => {
-    ui.style("game-title", L.narrow || L.short ? "game-title-compact" : null).id("game-title").label("Cellular Drift");
+    ui.style(__l10nStyle("game-title"), __l10nStyle(L.narrow || L.short ? "game-title-compact" : null)).id("game-title").label("Cellular Drift");
     para(T("A realtime mass arena. Move, absorb, split, eject — and manage the threats that hunt you."), Math.min(w, 36 * 16), "tagline", "tagline", true);
     para(accountLine(), w, "sub", "account-line", true);
     const list: Btn[] = [
       { id: "btn-play", text: T("Play"), act: showModeSelect },
       { id: "btn-help", text: T("Help & rules"), act: () => showScreen("help") },
-      { id: "btn-options", text: T("Options"), act: () => openMenu() },
+      { id: "btn-options", text: T("Options"), act: () => __l10nOptions() },
     ];
     const link = platform.inviteLink();
     if (link) {
@@ -391,7 +404,7 @@ function pauseScreen(L: Layout): void {
       { id: "btn-resume", text: T("Resume"), quiet: true, act: resumeGame },
       { id: "btn-restart", text: T("Restart round"), act: retry },
       { id: "btn-leave", text: T("Leave to modes"), act: leaveRound },
-      { id: "btn-pause-options", text: T("Options"), act: () => openMenu() },
+      { id: "btn-pause-options", text: T("Options"), act: () => __l10nOptions() },
     ], iw);
     ui.column("pause-settings", () => {
       const check = (key: "captions" | "cvdPalette", label: string): void => {
@@ -425,7 +438,7 @@ function resultScreen(L: Layout): void {
     ui.grid("breakdown", () => {
       for (const [k, label] of BREAKDOWN) {
         para(T(label), bw - ddW - 18, "bd-dt");
-        ui.style("bd-dd").label(String(res.bd.parts[k] || 0));
+        ui.style(__l10nStyle("bd-dd")).label(String(res.bd.parts[k] || 0));
       }
     }, { columns: [{ width: bw - ddW - 18 }, { width: ddW, align: "end" }], gap: { row: 4, column: 18 }, width: bw });
     para(T("Total score: {total} · Rank {rank}/{players}", { total: res.bd.total, rank: res.bd.rank, players: res.players }) + (res.bd.objectiveMet ? " · " + T("objective met") : ""), w, "total", "result-total", true);
