@@ -152,7 +152,7 @@ function firstId(name: ScreenName): string | null {
   }
 }
 
-export function drawScreens(): void {
+function drawScreensImmediate(): void {
   const L = layoutNow();
   if (app.focusNext && frame().frame - app.openedFrame >= 2) {
     const first = firstId(app.screen);
@@ -458,4 +458,11 @@ function resultScreen(L: Layout): void {
     button({ id: "btn-retry", text: T("Retry"), act: retry }, iw);
     button({ id: "btn-result-back", text: T("Back to modes"), act: () => { endSession(); showModeSelect(); } }, iw);
   });
+}
+
+export function drawScreens(): void {
+  if (app.screen !== "help") { drawScreensImmediate(); return; }
+  const actions = ["up","down","left","right","split","eject","hint","pause"];
+  const version = JSON.stringify([(app as any).settings ?? (app as any).options ?? {}, (platform as any).options ?? {}, actions.map((action) => bindings(action))]);
+  ui.retain!("help-screen", version, drawScreensImmediate);
 }
