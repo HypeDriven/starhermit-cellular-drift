@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-09-01T07:00:58.65274+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-26T17:23:23.942691+00:00",
+    "coverArtUpdatedAt": "2026-11-26T19:59:09.220158+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-26T17:23:22.756951+00:00",
+      "deployedAt": "2026-11-26T19:59:09.205659+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.50.0",
+      "engineVersion": "1.51.0",
       "deployWarning": null
     },
     "description": "Guide a growing cell through a petri dish, collecting nutrients and outmaneuvering hungry rivals and hazards.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-26T17:23:23.179Z",
-  "sourceCommit": "6f344c932bde18a2fd03b43d0918a8c28be9d8f4",
-  "bytesReceived": 2977254,
-  "archiveSha256": "100d210829a595d93eacb7c32f0c77ec4c2d51d8fd1edfbc998ad0187c272048",
+  "publishedAt": "2026-11-26T19:59:09.605Z",
+  "sourceCommit": "e92f81331e65ead151c103f6f222fefa821b785f",
+  "bytesReceived": 2977267,
+  "archiveSha256": "6d49b528b6b2343e0ab001b6844d5f746f9f3ef4a49d08f2b65f0bca894fc690",
   "indexSha256": "176f915c506e76ed71316a9f9537d4053ca93d3d509540e7fa47198f4da2776c",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 2977254,
+    "bytesReceived": 2977267,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.50.0",
+    "engineVersion": "1.51.0",
     "deployWarning": null
   },
   "liveVerification": {
