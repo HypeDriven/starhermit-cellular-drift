@@ -39,6 +39,7 @@ import {
 } from "starhermit:scene";
 import type { Material, MaterialHooks, Texture } from "starhermit:scene";
 import { OffscreenCanvas } from "starhermit:canvas";
+import { frame as engineFrame } from "starhermit:engine";
 import type { State, Theme } from "./classic.ts";
 import type { Look } from "./quality.ts";
 
@@ -98,6 +99,8 @@ const dotTex = dotTexture();
 
 // --- the dish ------------------------------------------------------------------------------
 const envGroup = new Group();
+// The dish (floor, shadow catcher, caustics, rim, glow, grid) never moves: still scenery (host API 1.49).
+envGroup.movable = false;
 let floorMesh: Mesh | null = null;
 let causticMesh: Mesh | null = null;
 const envMeshes: Mesh[] = [];
@@ -138,12 +141,14 @@ fn cd_band(p: vec2f, t: f32) -> f32 {
 }
 fn fragment(f: Fragment) -> vec4f {
   let p = f.world.xy / 38.0;
-  let c = cd_band(p, uniforms.uTime) * 0.65 + cd_band(p * 1.7 + vec2f(3.1), uniforms.uTime * 1.3) * 0.35;
+  // The engine clock (frame_time(), host API 1.49) less the offset to the shimmer's start, held at uFrozen under Reduced motion.
+  let t = select(uniforms.uFrozen, (frame_time() - uniforms.uOffset) * 0.6, uniforms.uRun > 0.5);
+  let c = cd_band(p, t) * 0.65 + cd_band(p * 1.7 + vec2f(3.1), t * 1.3) * 0.35;
   let edge = 1.0 - smoothstep(uniforms.uRadius * 0.82, uniforms.uRadius, length(f.world.xy));
   return vec4f(uniforms.uColor * c * uniforms.uStrength * edge, 1.0);
 }`;
 const causticUniforms = {
-  uTime: { value: 0 }, uRadius: { value: 600 }, uColor: { value: new Color(0xffffff) }, uStrength: { value: 0.05 },
+  uRun: { value: 0 }, uOffset: { value: 0 }, uFrozen: { value: 0 }, uRadius: { value: 600 }, uColor: { value: new Color(0xffffff) }, uStrength: { value: 0.05 },
 };
 const causticMat = new ShaderMaterial({
   uniforms: causticUniforms, fragmentShader: CAUSTIC_FRAGMENT, transparent: true, depthWrite: false, blending: AdditiveBlending,
@@ -204,6 +209,22 @@ function floorCanvas(size: number, detailed: boolean): OffscreenCanvas {
   return cv;
 }
 
+/** The floor canvas for these inputs, baked once (a high-contrast toggle or a new look at the
+ * same size reuses it). A detailed 2048-px bake costs over 100 M of the frame's 200 M canvas work
+ * units: should the frame's budget not cover it, the bake falls back to half the size. */
+let floorBake: { key: string; canvas: OffscreenCanvas } | null = null;
+function bakedFloor(size: number, detailed: boolean): OffscreenCanvas {
+  const key = `${size}|${detailed}|${decorSeed}|${theme.bg}|${theme.bgDeep}|${theme.membrane}`;
+  if (floorBake?.key === key) return floorBake.canvas;
+  let canvas: OffscreenCanvas;
+  try { canvas = floorCanvas(size, detailed); } catch (e) {
+    if (!(e instanceof RangeError) || size <= 256) throw e;
+    return bakedFloor(size / 2, detailed);
+  }
+  floorBake = { key, canvas };
+  return canvas;
+}
+
 let arenaRadius = 600;
 function buildEnvironment(radius: number): void {
   for (const m of envMeshes) {
@@ -216,7 +237,7 @@ function buildEnvironment(radius: number): void {
   floorTex?.dispose();
   const L = look!;
   const size = L.detailed ? L.budget.floorTexture : L.budget.floorTexture / 2;
-  floorTex = new CanvasTexture(floorCanvas(size, L.detailed));
+  floorTex = new CanvasTexture(bakedFloor(size, L.detailed));
   floorTex.colorSpace = SRGBColorSpace;
   floorHooks.uniforms!.uSize!.value = L.detailed ? size : 0;
   const floorMat = new MeshLambertMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: floorTex });
@@ -555,8 +576,13 @@ export function syncState(state: State): void {
     rebuildDish();
   }
 }
-function rebuildDish(): void {
-  if (!look || !lastState) return;
+/** Asks for the dish (floor, decor, barbs) to be rebuilt before the next frame draws: a theme,
+ * a look and a new round in one frame bake the floor once, not once each. */
+let dishDirty = false;
+function rebuildDish(): void { dishDirty = true; }
+function flushDish(): void {
+  if (!dishDirty || !look || !lastState) return;
+  dishDirty = false;
   buildEnvironment(arenaRadius);
   buildDecor(arenaRadius);
   syncBarbs(lastState);
@@ -636,6 +662,15 @@ const dummyP = new Vector3();
 const zAxis = new Vector3(0, 0, 1);
 const keyTmp = new Vector3();
 
+/** Runs the caustic shimmer on the engine clock (its phase `time * 0.6`, as the old per-frame
+ * uniform) or holds it where it is; the uniforms change only when that does. */
+function runCaustics(run: boolean): void {
+  if ((causticUniforms.uRun.value > 0.5) === run) return;
+  if (run) causticUniforms.uOffset.value = engineFrame().time - time;
+  else causticUniforms.uFrozen.value = time * 0.6;
+  causticUniforms.uRun.value = run ? 1 : 0;
+}
+
 /** Draws the frame: `alpha` between the last two ticks, `dt` seconds, the window's size in pixels. */
 export function draw(alpha: number, dt: number, focus: Focus | null, width: number, height: number): void {
   time += dt;
@@ -644,6 +679,7 @@ export function draw(alpha: number, dt: number, focus: Focus | null, width: numb
   if (nextAspect !== aspect) { aspect = nextAspect; updateFrustum(); }
   const state = lastState;
   if (!state || !look) { updateFrustum(); return; }
+  flushDish();
 
   // camera follow with critically damped smoothing
   if (focus) {
@@ -749,7 +785,7 @@ export function draw(alpha: number, dt: number, focus: Focus | null, width: numb
 
   // plankton drift and the caustic shimmer (frozen under reduced motion)
   if (decorPoints && !reducedMotion) decorPoints.rotation.z = time * 0.008;
-  if (!reducedMotion) causticUniforms.uTime.value = time * 0.6;
+  runCaustics(!reducedMotion);
   updateFx(dt);
 }
 

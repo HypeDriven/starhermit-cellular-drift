@@ -16,6 +16,7 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync, readdirSync, statSync, mkdirSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
+import { homedir } from 'node:os';
 
 const args = process.argv.slice(2);
 const dir = resolve(args[0] ?? '.');
@@ -49,7 +50,12 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const url = `http://127.0.0.1:${server.address().port}/`;
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--enable-features=Vulkan'] });
+// Chrome on the machine's GPU (~/games/tools/gpu-chrome.mjs: headed on a private Xvfb, one at a
+// time), falling back to headless SwiftShader where it cannot (GPU_ADAPTER=software forces that).
+const gpuChrome = existsSync(join(dir, '..', 'tools', 'gpu-chrome.mjs')) ? join(dir, '..', 'tools', 'gpu-chrome.mjs') : join(homedir(), 'games/tools/gpu-chrome.mjs');
+const { launchChrome } = await import(gpuChrome);
+const { browser, gpu, close } = await launchChrome(chromium);
+console.log(`# chrome on ${gpu}`);
 let failed = false;
 const intoLesson1 = [['click', 4, 4], ['shot', 'title'], ['key', 'Enter'], ['shot', 'modes'], ['key', 'Enter'], ['shot', 'learn'], ['key', 'Enter'], ['wait', 3000], ['shot', 'lesson1'],
   ['hold', 'ArrowLeft'], ['hold', 'ArrowUp'], ['wait', 6000], ['up', 'ArrowLeft'], ['up', 'ArrowUp'], ['shot', 'lesson1-done']];
@@ -94,6 +100,6 @@ for (const v of views.filter((x) => !only || x.name === only)) {
   for (const p of problems) console.log(`  ${p}`);
   await ctx.close();
 }
-await browser.close();
+await close();
 server.close();
 process.exit(failed ? 1 : 0);

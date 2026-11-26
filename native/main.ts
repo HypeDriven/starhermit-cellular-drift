@@ -17,8 +17,8 @@ import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // TICK_RATE: a tick every step, only while the round is active and not
 // paused, so a hidden window and a slow frame never move the round, and
 // play scripts replay exactly.
-import { frame, levelSettings, onFixedUpdate, onPreferencesChange, onQuit, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate } from "starhermit:engine";
-import { onAction, onPointerMove, value } from "starhermit:input";
+import { frame, levelSettings, onFixedUpdate, onPreferencesChange, onQuit, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate, setTargetFps } from "starhermit:engine";
+import { onAction, onPointerMove, primaryPointer, value } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { onSessionEnded } from "starhermit:platform";
 import { Content as C, Rules as R, type Breakdown, type Content, type State } from "./classic.ts";
@@ -398,10 +398,23 @@ onFixedUpdate(() => {
   afterTick();
   if (game.phase === "terminal" && !terminalShown) showResults();
 });
+/** The game's frame cap (host API 1.49 setTargetFps, set only on a change): 30 on the title (its
+ * key art covers the dish) and on phone levels (levelIndex <= 3) under a finger, where steady
+ * 33 ms frames beat 33/50 ms jitter; none otherwise. The engine sets it aside while its menus are
+ * open, and the player's frame-rate limit still applies. */
+let frameCap = -1;
+function capFrames(): void {
+  const cap = app.screen === "title" || (frame().levelIndex <= 3 && primaryPointer() === "coarse") ? 30 : 0;
+  if (cap === frameCap) return;
+  frameCap = cap;
+  setTargetFps(cap || null);
+}
+
 let frameDt = 0;
 onUpdate((dt) => {
   frameDt = dt;
   applyLook();
+  capFrames();
   audio.update();
   const t = now();
   if (hintUntil && t > hintUntil) { render.setHint(null); hintUntil = 0; }
