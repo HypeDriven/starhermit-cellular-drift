@@ -1,6 +1,6 @@
 # Cellular Drift — Game Design Document (running spec)
 
-This document describes Cellular Drift as it ships today: a StarHermit engine script game (engine 1.51.0, host API 1.51), played natively by the StarHermit client and in browsers by the engine's web runtime. Present tense throughout; where the design calls for something the code does not yet do, it is listed under "Design intent not yet implemented" at the end and nowhere else.
+This document describes Cellular Drift as it ships today: a StarHermit engine script game (engine 1.52.0, host API 1.52), played natively by the StarHermit client and in browsers by the engine's web runtime. Present tense throughout; where the design calls for something the code does not yet do, it is listed under "Design intent not yet implemented" at the end and nowhere else.
 
 ## 1. Overview
 
@@ -21,7 +21,7 @@ This document describes Cellular Drift as it ships today: a StarHermit engine sc
 
 | Path | Responsibility |
 |---|---|
-| `starhermit.txt` | Manifest: name, description, owner, cover, `server=score-script.js`, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.51.0`, `engine.minor=51`, `engine.capabilities=platform,storage,clipboard`, `control.*` keys, `engine.group.*`, `engine.gamepad.*` |
+| `starhermit.txt` | Manifest: name, description, owner, cover, `server=score-script.js`, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.52.0`, `engine.minor=52`, `engine.capabilities=platform,storage,clipboard`, `control.*` keys, `engine.group.*`, `engine.gamepad.*` |
 | `index.html`, `starhermit-files.json` | The engine's web loader page and file index, written by `npm run package` (`starhermit package --web .`); never edited by hand |
 | `native/main.ts` | Entry: screen flow, `startRound` for every mode, steering (pointer, keys, stick), Split / Eject / Hint, per-tick stat diffs → audio and shake, music intensity and danger ping, results with progression, achievements, the device board and score posting, lifecycle |
 | `native/screens.ts` | Every screen and the HUD in `starhermit:ui`, the toast and caption strip, the results vignette and the drawn medal |
@@ -258,7 +258,7 @@ Nine locales: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**
 
 | Feature | How |
 |---|---|
-| Manifest, cover, loader | `starhermit.txt` (engine pin 1.51.0, minor 32, capabilities platform, storage, clipboard); `index.html` + `starhermit-files.json` from `npm run package` |
+| Manifest, cover, loader | `starhermit.txt` (engine pin 1.52.0, minor 32, capabilities platform, storage, clipboard); `index.html` + `starhermit-files.json` from `npm run package` |
 | Player | `player()`; signing in and out is the runtime's (Sign in with StarHermit calls `requestSignIn`); a session ending shows a toast |
 | Cloud save | `saves`: `{ v: 1, progress }`, saved at every round's end; a conflict merges both devices' progress (`CDStore.mergeProgress`: better stars and bests, every done mark, larger lifetime counters, earliest achievements, later daily streak); a save another device wrote is merged in |
 | Browser-build migration | the JS SDK's slot `game:<slug>` (checksummed `{ sum, payload }` document) shows as foreign: its progress is merged and replaced once (`replaceForeign`), its captions / palette / theme kept where the account has none; the old per-player settings keys are imported the same way and removed (`settings.legacyKeys`, `removeLegacy`) |
@@ -331,16 +331,16 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 <!-- regional-localization:end -->
 
-## Engine 1.51.0
+## Engine 1.52.0
 
-Browser play uses the StarHermit 1.51.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the StarHermit 1.52.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
 
 Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
 
-**Frame rate (host API 1.51 `setTargetFps`).** The game caps itself at 30 frames a second on the title (its key art covers the dish) and, under a finger (`primaryPointer() === "coarse"`), on the phone graphics levels (`levelIndex` ≤ 3), where steady 33 ms frames replace 33/50 ms jitter; elsewhere there is no game cap. The arena sim stays at its fixed step rate whatever the frame rate. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
+**Frame rate (host API 1.52 `setTargetFps`).** The game caps itself at 30 frames a second on the title (its key art covers the dish) and, under a finger (`primaryPointer() === "coarse"`), on the phone graphics levels (`levelIndex` ≤ 3), where steady 33 ms frames replace 33/50 ms jitter; elsewhere there is no game cap. The arena sim stays at its fixed step rate whatever the frame rate. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
 
-**Still scenery (host API 1.51).** The dish (floor, shadow catcher, caustic layer, rim, glow and grid rings) is `movable = false`. The caustic shimmer runs on the engine's `frame_time()` less an offset, so its material is sent only when the shimmer starts or holds (Reduced motion), not every frame. Cells, barbs, motes and markers stay movable.
+**Still scenery (host API 1.52).** The dish (floor, shadow catcher, caustic layer, rim, glow and grid rings) is `movable = false`. The caustic shimmer runs on the engine's `frame_time()` less an offset, so its material is sent only when the shimmer starts or holds (Reduced motion), not every frame. Cells, barbs, motes and markers stay movable.
 
 Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.
